@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lottery Analytics Platform</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <header class="navbar">
+        <div class="logo">
+            <h2>Κληρώσεις, <span>με καθαρή εικόνα.</span></h2>
+        </div>
+        <nav>
+            <button class="btn nav-btn active" id="btn-joker" onclick="switchGame('joker')">Τζόκερ</button>
+            <button class="btn nav-btn" id="btn-lotto" onclick="switchGame('lotto')">Lotto</button>
+        </nav>
+    </header>
+
+    <main class="container">
+        <!-- Control / Filter Bar -->
+        <section class="card filter-section">
+            <div class="filter-controls">
+                <div class="filter-group">
+                    <label for="year-select">Χρονική Περίοδος:</label>
+                    <select class="input-control" id="year-select" onchange="loadStats()">
+                        <option value="all">Όλα τα έτη (2010 - Σήμερα)</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary Cards -->
+        <section class="stats-cards">
+            <div class="card stat-box">
+                <h4>Συνολικές Κληρώσεις Περιόδου</h4>
+                <p class="stat-number" id="total-draws-count">0</p>
+            </div>
+            <div class="card stat-box">
+                <h4>Παιχνίδι</h4>
+                <p class="stat-number highlighting" id="active-game-label">ΤΖΟΚΕΡ</p>
+            </div>
+        </section>
+
+        <!-- Analytics Dashboard Grid -->
+        <section class="dashboard-grid">
+            <div class="card chart-card">
+                <h3>Ιστόγραμμα Συχνότητας Αριθμών</h3>
+                <div class="chart-wrapper">
+                    <canvas id="frequencyChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card matrix-card">
+                <h3 id="matrix-title">Πίνακας Αριθμών & Εμφανίσεις</h3>
+                <div class="number-grid" id="numberGrid"></div>
+            </div>
+        </section>
+
+        <!-- Repetition Analysis Table Section -->
+        <section class="card repetition-card">
+            <h3>📊 Ανάλυση Επαναλήψεων Αριθμών (Τελευταίες 10 Κληρώσεις vs Προηγούμενες 10)</h3>
+            <p class="subtitle">Έλεγχος για το πόσοι νικητήριοι αριθμοί είχαν εμφανιστεί στις 10 αμέσως προηγούμενες κληρώσεις.</p>
+            
+            <div class="table-responsive">
+                <table class="rep-table">
+                    <thead>
+                        <tr>
+                            <th>Κλήρωση / Ημ/νία</th>
+                            <th>Αριθμοί</th>
+                            <th>0 Εμφανίσεις (Νέοι)</th>
+                            <th>1 Εμφάνιση</th>
+                            <th>2 Εμφανίσεις</th>
+                            <th>3+ Εμφανίσεις</th>
+                        </tr>
+                    </thead>
+                    <tbody id="repetitionTableBody">
+                        <!-- Γεμίζει δυναμικά μέσω JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Generators Grid (2 Γεννήτριες) -->
+        <section class="generators-grid">
+            
+            <!-- 1. Απλή Τυχαία Γεννήτρια -->
+            <div class="card generator-card">
+                <h3>🎲 Απλή Τυχαία Γεννήτρια</h3>
+                <p class="subtitle">Παραγωγή εντελώς τυχαίου δελτίου χωρίς φίλτρα.</p>
+                <button class="btn btn-primary" onclick="generateSimpleTicket()">🎰 Τυχαίο Δελτίο</button>
+                
+                <div class="result-box" id="simpleResultBox" style="display: none;">
+                    <h4>Τυχαίος Συνδυασμός:</h4>
+                    <div class="balls-container" id="simpleTicketBalls"></div>
+                </div>
+            </div>
+
+            <!-- 2. Έξυπνη Γεννήτρια με Κανόνες -->
+            <div class="card generator-card">
+                <h3>⚙️ Έξυπνη Γεννήτρια με Κανόνες</h3>
+                <p class="subtitle">Ορίστε κανόνες καθυστέρησης ή συχνότητας.</p>
+
+                <div id="rules-container"></div>
+
+                <div class="generator-actions">
+                    <button class="btn btn-secondary" onclick="addRuleRow()">+ Κανόνας</button>
+                    <button class="btn btn-primary" onclick="generateRulesTicket()">🎯 Παραγωγή με Κανόνες</button>
+                </div>
+
+                <div class="result-box" id="rulesResultBox" style="display: none;">
+                    <h4>Συνδυασμός με Κανόνες:</h4>
+                    <div class="balls-container" id="rulesTicketBalls"></div>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
