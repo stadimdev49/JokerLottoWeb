@@ -1,116 +1,61 @@
 <!DOCTYPE html>
-<html lang="el">
+<html lang="el" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Joker & Lotto Analytics</title>
-    <!-- Bootstrap 5 CSS -->
+    <title>Joker & Lotto Analytics Pro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f4f6f9; font-family: system-ui, -apple-system, sans-serif; }
-        .ball {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 38px;
-            height: 38px;
-            border-radius: 50%;
-            font-weight: bold;
-            color: #fff;
-            background-color: #0d6efd;
-            margin: 2px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .joker-ball { background-color: #ffc107; color: #000; }
-        .stat-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
-            gap: 10px;
-        }
-        .stat-card {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 8px;
-            text-align: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        .stat-number { font-size: 1.25rem; font-weight: bold; color: #0d6efd; }
-        .stat-count { font-size: 0.75rem; color: #6c757d; }
-    </style>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+<nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom mb-4">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="#">🎰 Joker & Lotto Stats</a>
-        <div class="navbar-nav">
-            <a class="nav-link active" href="#" data-game="joker">Τζόκερ</a>
-            <a class="nav-link" href="#" data-game="lotto">Λόττο</a>
+        <a class="navbar-brand fw-bold" href="#">🎰 Lottery Analytics Pro</a>
+        <div class="d-flex align-items-center gap-3">
+            <div class="navbar-nav flex-row gap-2">
+                <a class="nav-link active fw-bold" href="#" data-game="joker">Τζόκερ</a>
+                <a class="nav-link fw-bold" href="#" data-game="lotto">Λόττο</a>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" id="btn-theme-toggle">🌙 Dark Mode</button>
         </div>
     </div>
 </nav>
 
 <div class="container mb-5">
-    
-    <!-- Top Summary Card -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card shadow-sm border-0">
-                <div class="card-body d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="card-title mb-1">Συνολικές Κληρώσεις στη Βάση</h5>
-                        <p class="card-text text-muted mb-0">Αυτόματη ενημέρωση από τον ΟΠΑΠ</p>
-                    </div>
-                    <h2 class="text-primary fw-bold mb-0" id="total-draws">0</h2>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Navigation Tabs -->
     <ul class="nav nav-pills mb-4" id="mainTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="stats-tab" data-bs-toggle="pill" data-bs-target="#stats-panel" type="button" role="tab">Συχνότητες Αριθμών</button>
+        <li class="nav-item">
+            <button class="nav-link active" id="tab-analysis" data-bs-toggle="pill" data-bs-target="#panel-analysis">📊 Ανάλυση 10 Κληρώσεων</button>
         </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="draws-tab" data-bs-toggle="pill" data-bs-target="#draws-panel" type="button" role="tab">Τελευταίες Κληρώσεις</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="rep-tab" data-bs-toggle="pill" data-bs-target="#rep-panel" type="button" role="tab">Ανάλυση Επαναλήψεων</button>
+        <li class="nav-item">
+            <button class="nav-link" id="tab-generator" data-bs-toggle="pill" data-bs-target="#panel-generator">🎲 Γεννήτρια Αριθμών</button>
         </li>
     </ul>
 
-    <!-- Tab Contents -->
-    <div class="tab-content" id="mainTabsContent">
+    <div class="tab-content">
         
-        <!-- PANEL 1: STATS -->
-        <div class="tab-pane fade show active" id="stats-panel" role="tabpanel">
-            <div class="card shadow-sm border-0 p-4 mb-4">
-                <h5 class="card-title mb-3">Συχνότητα Εμφάνισης Βασικών Αριθμών</h5>
-                <div id="main-numbers-grid" class="stat-grid"></div>
-            </div>
-
-            <div class="card shadow-sm border-0 p-4" id="joker-grid-container">
-                <h5 class="card-title mb-3">Συχνότητα Εμφάνισης Αριθμών Τζόκερ</h5>
-                <div id="joker-numbers-grid" class="stat-grid"></div>
-            </div>
-        </div>
-
-        <!-- PANEL 2: DRAWS TABLE -->
-        <div class="tab-pane fade" id="draws-panel" role="tabpanel">
-            <div class="card shadow-sm border-0 p-3">
+        <!-- PANEL 1: ΑΝΑΛΥΣΗ ΤΕΛΕΥΤΑΙΩΝ 10 ΚΛΗΡΩΣΕΩΝ -->
+        <div class="tab-pane fade show active" id="panel-analysis">
+            <div class="card shadow-sm p-4 mb-4">
+                <h5 class="card-title mb-3">Τελευταίες 10 Κληρώσεις & Συχνότητα στις Προηγούμενες</h5>
+                <div class="mb-3 d-flex gap-2 flex-wrap">
+                    <span class="badge cat-absent p-2">Απουσία (0)</span>
+                    <span class="badge cat-1 p-2">1 Εμφάνιση</span>
+                    <span class="badge cat-2 p-2">2 Εμφανίσεις</span>
+                    <span class="badge cat-3plus p-2">3+ Εμφανίσεις</span>
+                </div>
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
+                    <table class="table table-hover align-middle">
                         <thead>
                             <tr>
                                 <th>Κλήρωση</th>
                                 <th>Ημερομηνία</th>
-                                <th>Νικητήριοι Αριθμοί</th>
-                                <th>Joker / Bonus</th>
+                                <th>Αριθμοί & Κατηγορία Εμφάνισης</th>
+                                <th>Joker</th>
                             </tr>
                         </thead>
-                        <tbody id="draws-tbody">
+                        <tbody id="analysis-tbody">
                             <!-- Populated via JS -->
                         </tbody>
                     </table>
@@ -118,12 +63,39 @@
             </div>
         </div>
 
-        <!-- PANEL 3: REPETITIONS -->
-        <div class="tab-pane fade" id="rep-panel" role="tabpanel">
-            <div class="card shadow-sm border-0 p-4">
-                <h5 class="card-title mb-3">Επαναλαμβανόμενοι Αριθμοί</h5>
-                <div id="repetitions-container" class="alert alert-info mb-0">
-                    Φόρτωση δεδομένων...
+        <!-- PANEL 2: ΓΕΝΝΗΤΡΙΑ ΜΕ ΚΑΝΟΝΕΣ -->
+        <div class="tab-pane fade" id="panel-generator">
+            <div class="card shadow-sm p-4">
+                <h5 class="card-title mb-4">Έξυπνη Γεννήτρια Δεδομένων</h5>
+                
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Τύπος Παραγωγής:</label>
+                        <select id="gen-mode" class="form-select">
+                            <option value="random">🎲 Πλήρως Τυχαία</option>
+                            <option value="rules">🧠 Βάσει Κανόνων / Στατιστικών</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 rules-option d-none">
+                        <label class="form-label fw-bold">Εύρος Ιστορικού (Κληρώσεις):</label>
+                        <input type="number" id="gen-lookback" class="form-control" value="10" min="5" max="100">
+                    </div>
+
+                    <div class="col-md-4 rules-option d-none">
+                        <label class="form-label fw-bold">Στρατηγική:</label>
+                        <select id="gen-rule-type" class="form-select">
+                            <option value="hot">🔥 Θερμοί (Με τις περισσότερες εμφανίσεις)</option>
+                            <option value="cold">❄️ Ψυχροί (Μεγάλες απουσίες)</option>
+                            <option value="balanced">⚖️ Ισορροπημένο (3 Θερμοί + 2 Ψυχροί)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button id="btn-generate" class="btn btn-primary btn-lg w-100 mb-4">Παραγωγή Δελτίου</button>
+
+                <div id="gen-result" class="p-4 bg-body-tertiary rounded text-center border">
+                    <em class="text-muted">Επιλέξτε παραμέτρους και πατήστε "Παραγωγή Δελτίου"</em>
                 </div>
             </div>
         </div>
@@ -131,9 +103,7 @@
     </div>
 </div>
 
-<!-- Bootstrap 5 Bundle JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/bootstrap.bundle.min.js"></script>
-<!-- Custom JS -->
 <script src="/static/script.js"></script>
 </body>
 </html>
