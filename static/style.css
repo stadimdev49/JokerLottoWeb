@@ -1,6 +1,5 @@
-/* static/style.css */
 body {
-    background-color: #f8f9fa;
+    transition: background-color 0.3s, color 0.3s;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -8,13 +7,14 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     font-weight: bold;
     color: #ffffff;
     background-color: #0d6efd;
     margin: 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .joker-ball {
@@ -22,27 +22,8 @@ body {
     color: #000000;
 }
 
-.stat-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-    gap: 10px;
-}
-
-.stat-card {
-    background: #ffffff;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    padding: 8px;
-    text-align: center;
-}
-
-.stat-number {
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #0d6efd;
-}
-
-.stat-count {
-    font-size: 0.75rem;
-    color: #6c757d;
-}
+/* Badge Categories για την Ανάλυση */
+.cat-absent { background-color: #dc3545 !important; color: white !important; }
+.cat-1 { background-color: #0dcaf0 !important; color: black !important; }
+.cat-2 { background-color: #fd7e14 !important; color: white !important; }
+.cat-3plus { background-color: #198754 !important; color: white !important; }
