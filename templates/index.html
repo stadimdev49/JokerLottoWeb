@@ -24,13 +24,13 @@
 
 <div class="container mb-5">
     
-    <!-- Top Stats -->
+    <!-- Header Stats -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow-sm p-3 d-flex flex-row justify-content-between align-items-center">
                 <div>
                     <h5 class="mb-1">Συνολικές Κληρώσεις στη Βάση</h5>
-                    <p class="text-muted mb-0">Αυτόματος συγχρονισμός 2 φορές το 24ωρο</p>
+                    <p class="text-muted mb-0">Αυτόματος συγχρονισμός 2 φορές το 24ωρο (09:00 & 23:00)</p>
                 </div>
                 <h2 class="text-primary fw-bold mb-0" id="total-draws">0</h2>
             </div>
@@ -46,7 +46,7 @@
             <button class="nav-link" id="tab-freq" data-bs-toggle="pill" data-bs-target="#panel-freq">📈 Συχνότητες Αριθμών</button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" id="tab-gen" data-bs-toggle="pill" data-bs-target="#panel-gen">🎲 Γεννήτρια Αριθμών</button>
+            <button class="nav-link" id="tab-gen" data-bs-toggle="pill" data-bs-target="#panel-gen">🎲 Γεννήτριες Αριθμών</button>
         </li>
     </ul>
 
@@ -79,7 +79,7 @@
             </div>
         </div>
 
-        <!-- PANEL 2: FREQUENCIES -->
+        <!-- PANEL 2: FREQUENCIES (ΠΛΗΡΩΣ ΛΕΙΤΟΥΡΓΙΚΟ) -->
         <div class="tab-pane fade" id="panel-freq">
             <div class="card shadow-sm p-4 mb-4">
                 <h5 class="card-title mb-3">Συχνότητα Εμφάνισης Βασικών Αριθμών</h5>
@@ -91,42 +91,54 @@
             </div>
         </div>
 
-        <!-- PANEL 3: GENERATOR -->
+        <!-- PANEL 3: GENERATORS (ΔΥΟ ΓΕΝΝΗΤΡΙΕΣ) -->
         <div class="tab-pane fade" id="panel-gen">
             <div class="card shadow-sm p-4">
                 <h5 class="card-title mb-4">Δημιουργία Δελτίου</h5>
                 
-                <div class="row g-3 mb-4">
+                <div class="row g-4 mb-4">
+                    <!-- 1. Τυχαία Γεννήτρια -->
                     <div class="col-md-6">
-                        <div class="card p-3 h-100">
-                            <h6>🎲 Απλή Τυχαία Γεννήτρια</h6>
-                            <p class="text-muted small">Δημιουργία τυχαίων αριθμών χωρίς περιορισμούς.</p>
-                            <button id="btn-gen-random" class="btn btn-outline-primary mt-auto">Παραγωγή Τυχαίου</button>
+                        <div class="card p-3 h-100 border">
+                            <h6 class="fw-bold">🎲 1. Απλή Τυχαία Γεννήτρια</h6>
+                            <p class="text-muted small">Δημιουργεί μια πλήρως τυχαία πεντάδα/εξάδα μαζί με τον αριθμό Τζόκερ.</p>
+                            <button id="btn-gen-random" class="btn btn-outline-primary mt-auto">Παραγωγή Τυχαίου Δελτίου</button>
                         </div>
                     </div>
+
+                    <!-- 2. Γεννήτρια με Κανόνες -->
                     <div class="col-md-6">
-                        <div class="card p-3 h-100">
-                            <h6>🧠 Γεννήτρια με Κανόνες</h6>
-                            <div id="rules-container" class="mb-2">
-                                <div class="rule-row row g-2 mb-2">
-                                    <div class="col-4">
-                                        <input type="number" class="form-control form-control-sm rule-count" value="2" placeholder="Πλήθος">
-                                    </div>
-                                    <div class="col-4">
-                                        <input type="number" class="form-control form-control-sm rule-min-delay" value="0" placeholder="Min Απουσία">
-                                    </div>
-                                    <div class="col-4">
-                                        <input type="number" class="form-control form-control-sm rule-max-delay" value="5" placeholder="Max Απουσία">
+                        <div class="card p-3 h-100 border">
+                            <h6 class="fw-bold">🧠 2. Έξυπνη Γεννήτρια με Κανόνες Καθυστερήσεων</h6>
+                            <p class="text-muted small">Ορίστε πόσους αριθμούς θέλετε από συγκεκριμένα εύρη καθυστέρησης (απουσίας):</p>
+                            
+                            <div id="rules-container" class="mb-3">
+                                <div class="rule-row bg-body-tertiary p-2 rounded mb-2">
+                                    <div class="row g-2 align-items-center">
+                                        <div class="col-4">
+                                            <label class="form-label small mb-1">Πλήθος</label>
+                                            <input type="number" class="form-control form-control-sm rule-count" value="3" min="1" max="6">
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label small mb-1">Min Απουσία</label>
+                                            <input type="number" class="form-control form-control-sm rule-min-delay" value="0" min="0">
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label small mb-1">Max Απουσία</label>
+                                            <input type="number" class="form-control form-control-sm rule-max-delay" value="5" min="0">
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+                            
                             <button id="btn-gen-rules" class="btn btn-primary mt-auto">Παραγωγή με Κανόνες</button>
                         </div>
                     </div>
                 </div>
 
+                <!-- Αποτελέσματα Γεννήτριας -->
                 <div id="gen-result" class="p-4 bg-body-tertiary rounded text-center border">
-                    <em class="text-muted">Πατήστε ένα κουμπί για παραγωγή δελτίου</em>
+                    <em class="text-muted">Επιλέξτε μία από τις δύο γεννήτριες για να παραγάγετε δελτίο.</em>
                 </div>
             </div>
         </div>
