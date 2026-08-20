@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", function () {
     let currentGame = "joker";
 
-    // --- DARK MODE CONTROLLER ---
+    // --- DARK MODE TOGGLE ---
     const themeBtn = document.getElementById("btn-theme-toggle");
     const htmlEl = document.documentElement;
 
@@ -26,78 +26,128 @@ document.addEventListener("DOMContentLoaded", function () {
             document.querySelectorAll(".navbar-nav .nav-link").forEach(l => l.classList.remove("active"));
             this.classList.add("active");
             currentGame = this.getAttribute("data-game");
-            loadAnalysisData();
+            loadAllData();
         });
     });
 
-    // --- GENERATOR FORM TOGGLES ---
-    const genModeSelect = document.getElementById("gen-mode");
-    genModeSelect.addEventListener("change", function () {
-        const isRules = this.value === "rules";
-        document.querySelectorAll(".rules-option").forEach(el => {
-            el.classList.toggle("d-none", !isRules);
-        });
-    });
+    function loadAllData() {
+        loadRepetitions();
+        loadStats();
+    }
 
-    // --- LOAD ANALYSIS DATA ---
-    function loadAnalysisData() {
-        fetch(`/api/draws/analysis?game=${currentGame}`)
+    // 1. REPETITIONS ANALYSIS (10 ΚΛΗΡΩΣΕΙΣ)
+    function loadRepetitions() {
+        fetch(`/api/stats/repetitions?game=${currentGame}`)
             .then(res => res.json())
             .then(data => {
-                const tbody = document.getElementById("analysis-tbody");
+                const tbody = document.getElementById("rep-tbody");
                 tbody.innerHTML = "";
 
-                if (!data.draws || data.draws.length === 0) {
-                    tbody.innerHTML = "<tr><td colspan='4' class='text-center text-muted'>Δεν βρέθηκαν δεδομένα.</td></tr>";
+                if (!data.repetitions || data.repetitions.length === 0) {
+                    tbody.innerHTML = "<tr><td colspan='3' class='text-center text-muted'>Δεν βρέθηκαν δεδομένα.</td></tr>";
                     return;
                 }
 
-                data.draws.forEach(draw => {
+                data.repetitions.forEach(draw => {
                     const tr = document.createElement("tr");
 
-                    const ballsHtml = draw.numbers_analysis.map(item => {
+                    const details = draw.details;
+                    let ballsHtml = "";
+
+                    draw.numbers.forEach(num => {
                         let catClass = "cat-absent";
-                        if (item.category === "1_appear") catClass = "cat-1";
-                        if (item.category === "2_appears") catClass = "cat-2";
-                        if (item.category === "3_plus_appears") catClass = "cat-3plus";
+                        if (details["1"].includes(num)) catClass = "cat-1";
+                        if (details["2"].includes(num)) catClass = "cat-2";
+                        if (details["3+"].includes(num)) catClass = "cat-3plus";
 
-                        return `<span class="ball ${catClass}" title="${item.prev_appearances} εμφανίσεις στις προηγούμενες 10">${item.number}</span>`;
-                    }).join(" ");
-
-                    const jokerHtml = draw.joker ? `<span class="ball joker-ball">${draw.joker}</span>` : "-";
+                        ballsHtml += `<span class="ball ${catClass}">${num}</span> `;
+                    });
 
                     tr.innerHTML = `
                         <td><strong>#${draw.draw_id}</strong></td>
                         <td>${draw.draw_date}</td>
                         <td>${ballsHtml}</td>
-                        <td>${jokerHtml}</td>
                     `;
                     tbody.appendChild(tr);
                 });
             })
-            .catch(err => console.error("Error loading analysis:", err));
+            .catch(err => console.error("Repetitions error:", err));
     }
 
-    // --- GENERATE TICKET ---
-    document.getElementById("btn-generate").addEventListener("click", function () {
-        const mode = genModeSelect.value;
-        const lookback = document.getElementById("gen-lookback").value;
-        const ruleType = document.getElementById("gen-rule-type").value;
-
-        fetch(`/api/generate?game=${currentGame}&mode=${mode}&lookback=${lookback}&rule_type=${ruleType}`)
+    // 2. FREQUENCIES STATS
+    function loadStats() {
+        fetch(`/api/stats?game=${currentGame}&year=all`)
             .then(res => res.json())
             .then(data => {
-                const resContainer = document.getElementById("gen-result");
-                const mainBalls = data.numbers.map(n => `<span class="ball">${n}</span>`).join(" ");
-                const jokerBall = data.joker ? `<span class="ball joker-ball">${data.joker}</span>` : "";
+                document.getElementById("total-draws").innerText = data.total_draws || 0;
 
-                resContainer.innerHTML = `
-                    <h5 class="text-muted mb-3">Προτεινόμενο Δελτίο (${data.mode === 'rules' ? 'Με Κανόνες' : 'Τυχαίο'})</h5>
-                    <div class="mb-2">${mainBalls} ${jokerBall}</div>
-                `;
+                renderGrid("main-freq-grid", data.frequencies);
+
+                const jokerContainer = document.getElementById("joker-freq-container");
+                if (currentGame === "joker") {
+                    jokerContainer.style.display = "block";
+                    renderGrid("joker-freq-grid", data.joker_frequencies);
+                } else {
+                    jokerContainer.style.display = "none";
+                }
             });
+    }
+
+    function renderGrid(containerId, dataObj) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = "";
+        if (!dataObj) return;
+
+        Object.keys(dataObj).forEach(num => {
+            const card = document.createElement("div");
+            card.className = "stat-card";
+            card.innerHTML = `
+                <div class="stat-number">${num}</div>
+                <div class="stat-count">${dataObj[num]} φορές</div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    // 3. GENERATOR
+    document.getElementById("btn-gen-random").addEventListener("click", () => {
+        fetch(`/api/generate/random?game=${currentGame}`)
+            .then(res => res.json())
+            .then(data => displayGenerated(data));
     });
 
+    document.getElementById("btn-gen-rules").addEventListener("click", () => {
+        const ruleRows = document.querySelectorAll(".rule-row");
+        const rules = [];
+
+        ruleRows.forEach(row => {
+            rules.push({
+                count: row.querySelector(".rule-count").value,
+                min_delay: row.querySelector(".rule-min-delay").value,
+                max_delay: row.querySelector(".rule-max-delay").value
+            });
+        });
+
+        fetch("/api/generate/rules", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ game: currentGame, rules: rules })
+        })
+            .then(res => res.json())
+            .then(data => displayGenerated(data));
+    });
+
+    function displayGenerated(data) {
+        const resContainer = document.getElementById("gen-result");
+        const mainBalls = data.numbers.map(n => `<span class="ball">${n}</span>`).join(" ");
+        const jokerBall = data.joker ? `<span class="ball joker-ball">${data.joker}</span>` : "";
+
+        resContainer.innerHTML = `
+            <h5 class="text-muted mb-3">Προτεινόμενο Δελτίο</h5>
+            <div>${mainBalls} ${jokerBall}</div>
+        `;
+    }
+
     // Initial Load
-    loadAnalysisData();
+    loadAllData();
 });
