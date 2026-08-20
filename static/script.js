@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", function () {
     let currentGame = "joker";
 
-    // --- DARK MODE TOGGLE ---
+    // --- DARK MODE CONTROLLER ---
     const themeBtn = document.getElementById("btn-theme-toggle");
     const htmlEl = document.documentElement;
 
@@ -30,12 +30,13 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
+    // Φόρτωση όλων των δεδομένων κατά την εναλλαγή ή έναρξη
     function loadAllData() {
         loadRepetitions();
         loadStats();
     }
 
-    // 1. REPETITIONS ANALYSIS (10 ΚΛΗΡΩΣΕΙΣ)
+    // 1. ΑΝΑΛΥΣΗ ΕΠΑΝΑΛΗΨΕΩΝ
     function loadRepetitions() {
         fetch(`/api/stats/repetitions?game=${currentGame}`)
             .then(res => res.json())
@@ -50,7 +51,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 data.repetitions.forEach(draw => {
                     const tr = document.createElement("tr");
-
                     const details = draw.details;
                     let ballsHtml = "";
 
@@ -74,7 +74,7 @@ document.addEventListener("DOMContentLoaded", function () {
             .catch(err => console.error("Repetitions error:", err));
     }
 
-    // 2. FREQUENCIES STATS
+    // 2. ΣΥΧΝΟΤΗΤΕΣ ΑΡΙΘΜΩΝ
     function loadStats() {
         fetch(`/api/stats?game=${currentGame}&year=all`)
             .then(res => res.json())
@@ -90,7 +90,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 } else {
                     jokerContainer.style.display = "none";
                 }
-            });
+            })
+            .catch(err => console.error("Stats error:", err));
     }
 
     function renderGrid(containerId, dataObj) {
@@ -109,13 +110,15 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    // 3. GENERATOR
+    // 3. ΓΕΝΝΗΤΡΙΕΣ ΑΡΙΘΜΩΝ
+    // Α) Τυχαία Γεννήτρια
     document.getElementById("btn-gen-random").addEventListener("click", () => {
         fetch(`/api/generate/random?game=${currentGame}`)
             .then(res => res.json())
-            .then(data => displayGenerated(data));
+            .then(data => displayGenerated(data, "Τυχαία Παραγωγή"));
     });
 
+    // Β) Γεννήτρια με Κανόνες
     document.getElementById("btn-gen-rules").addEventListener("click", () => {
         const ruleRows = document.querySelectorAll(".rule-row");
         const rules = [];
@@ -134,20 +137,25 @@ document.addEventListener("DOMContentLoaded", function () {
             body: JSON.stringify({ game: currentGame, rules: rules })
         })
             .then(res => res.json())
-            .then(data => displayGenerated(data));
+            .then(data => displayGenerated(data, "Παραγωγή με Κανόνες"));
     });
 
-    function displayGenerated(data) {
+    function displayGenerated(data, modeTitle) {
         const resContainer = document.getElementById("gen-result");
+        if (data.status !== "success") {
+            resContainer.innerHTML = `<span class="text-danger">Σφάλμα κατά την παραγωγή δελτίου.</span>`;
+            return;
+        }
+
         const mainBalls = data.numbers.map(n => `<span class="ball">${n}</span>`).join(" ");
         const jokerBall = data.joker ? `<span class="ball joker-ball">${data.joker}</span>` : "";
 
         resContainer.innerHTML = `
-            <h5 class="text-muted mb-3">Προτεινόμενο Δελτίο</h5>
-            <div>${mainBalls} ${jokerBall}</div>
+            <h6 class="text-muted mb-3">Προτεινόμενο Δελτίο (${modeTitle})</h6>
+            <div class="d-flex justify-content-center align-items-center gap-1">${mainBalls} ${jokerBall}</div>
         `;
     }
 
-    // Initial Load
+    // Αρχική Φόρτωση
     loadAllData();
 });
