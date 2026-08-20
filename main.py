@@ -141,11 +141,19 @@ templates = Jinja2Templates(directory="templates")
 async def read_root(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
 
-@app.get("/api/sync")
-async def force_sync():
-    joker_new = sync_game_data("joker")
-    lotto_new = sync_game_data("lotto")
-    return {"status": "success", "joker_added": joker_new, "lotto_added": lotto_new}
+@app.get("/api/years")
+async def get_available_years(game: str = "joker"):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DISTINCT strftime('%Y', draw_date) as yr 
+        FROM draws 
+        WHERE game_type = ? AND yr IS NOT NULL 
+        ORDER BY yr DESC
+    """, (game,))
+    years = [r[0] for r in cursor.fetchall()]
+    conn.close()
+    return {"status": "success", "years": years}
 
 @app.get("/api/stats")
 async def get_stats(game: str = "joker", year: Optional[str] = "all"):
@@ -184,6 +192,7 @@ async def get_stats(game: str = "joker", year: Optional[str] = "all"):
     return {
         "status": "success",
         "game": game,
+        "selected_year": year,
         "total_draws": total_draws,
         "frequencies": frequencies,
         "joker_frequencies": joker_frequencies
@@ -273,81 +282,84 @@ async def generate_simple_random(game: str = "joker"):
 
 @app.post("/api/generate/rules")
 async def generate_numbers_by_rules(request: Request):
-    data = await request.json()
-    game = data.get("game", "joker")
-    rules = data.get("rules", [])
+    try:
+        data = await request.json()
+        game = data.get("game", "joker")
+        rules = data.get("rules", [])
 
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT num1, num2, num3, num4, num5, num6 
-        FROM draws 
-        WHERE game_type = ? 
-        ORDER BY draw_date DESC, draw_id DESC
-    """, (game,))
-    draws = cursor.fetchall()
-    conn.close()
+        cursor.execute("""
+            SELECT num1, num2, num3, num4, num5, num6 
+            FROM draws 
+            WHERE game_type = ? 
+            ORDER BY draw_date DESC, draw_id DESC
+        """, (game,))
+        draws = cursor.fetchall()
+        conn.close()
 
-    max_num = 45 if game == "joker" else 49
-    limit_nums = 5 if game == "joker" else 6
+        max_num = 45 if game == "joker" else 49
+        limit_nums = 5 if game == "joker" else 6
 
-    delays = {i: 9999 for i in range(1, max_num + 1)}
-    for index, draw in enumerate(draws):
-        main_draw_nums = [n for n in draw[:limit_nums] if n is not None]
-        for num in range(1, max_num + 1):
-            if num in main_draw_nums and delays[num] == 9999:
-                delays[num] = index
+        delays = {i: 9999 for i in range(1, max_num + 1)}
+        for index, draw in enumerate(draws):
+            main_draw_nums = [n for n in draw[:limit_nums] if n is not None]
+            for num in range(1, max_num + 1):
+                if num in main_draw_nums and delays[num] == 9999:
+                    delays[num] = index
 
-    selected_numbers = []
-    used_numbers = set()
+        selected_numbers = []
+        used_numbers = set()
 
-    for rule in rules:
-        count_needed = int(rule.get("count", 1))
-        min_delay = rule.get("min_delay")
-        max_delay = rule.get("max_delay")
+        for rule in rules:
+            count_needed = int(rule.get("count", 1) or 1)
+            min_delay = rule.get("min_delay")
+            max_delay = rule.get("max_delay")
 
-        candidates = []
+            candidates = []
 
-        for num in range(1, max_num + 1):
-            if num in used_numbers:
-                continue
+            for num in range(1, max_num + 1):
+                if num in used_numbers:
+                    continue
 
-            valid = True
+                valid = True
 
-            if min_delay is not None and min_delay != "" and delays[num] < int(min_delay):
-                valid = False
-            if max_delay is not None and max_delay != "" and delays[num] > int(max_delay):
-                valid = False
+                if min_delay is not None and str(min_delay).strip() != "" and delays[num] < int(min_delay):
+                    valid = False
+                if max_delay is not None and str(max_delay).strip() != "" and delays[num] > int(max_delay):
+                    valid = False
 
-            if valid:
-                candidates.append(num)
+                if valid:
+                    candidates.append(num)
 
-        if len(candidates) < count_needed:
-            chosen = candidates
-        else:
-            chosen = random.sample(candidates, count_needed)
+            if len(candidates) < count_needed:
+                chosen = candidates
+            else:
+                chosen = random.sample(candidates, count_needed)
 
-        selected_numbers.extend(chosen)
-        used_numbers.update(chosen)
+            selected_numbers.extend(chosen)
+            used_numbers.update(chosen)
 
-    needed_total = 5 if game == "joker" else 6
-    while len(selected_numbers) < needed_total:
-        remaining = [n for n in range(1, max_num + 1) if n not in used_numbers]
-        if not remaining:
-            break
-        pick = random.choice(remaining)
-        selected_numbers.append(pick)
-        used_numbers.add(pick)
+        needed_total = 5 if game == "joker" else 6
+        while len(selected_numbers) < needed_total:
+            remaining = [n for n in range(1, max_num + 1) if n not in used_numbers]
+            if not remaining:
+                break
+            pick = random.choice(remaining)
+            selected_numbers.append(pick)
+            used_numbers.add(pick)
 
-    joker_number = random.randint(1, 20) if game == "joker" else None
-    selected_numbers.sort()
+        joker_number = random.randint(1, 20) if game == "joker" else None
+        selected_numbers.sort()
 
-    return {
-        "status": "success",
-        "numbers": selected_numbers,
-        "joker": joker_number
-    }
+        return {
+            "status": "success",
+            "numbers": selected_numbers,
+            "joker": joker_number
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
