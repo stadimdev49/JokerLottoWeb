@@ -1,6 +1,7 @@
 import sqlite3
 import calendar
 import requests
+import random
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
@@ -177,11 +178,16 @@ def shutdown_event():
 
 
 # ==========================================
-# FRONTEND ROUTE
+# FRONTEND & HEALTH ROUTES
 # ==========================================
 @app.get("/", response_class=HTMLResponse)
+@app.head("/")
 def read_root(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
 
 
 # ==========================================
@@ -238,7 +244,6 @@ def get_stats(
     game: str = Query("joker", regex="^(joker|lotto)$"),
     year: str = Query("all")
 ):
-    """Επιστρέφει γενικά στατιστικά συχνότητας με υποστήριξη φίλτρου έτους."""
     max_num = 45 if game == "joker" else 49
     max_joker = 20 if game == "joker" else 20
 
@@ -274,7 +279,9 @@ def get_stats(
         "year": year,
         "total_draws": len(rows),
         "numbers_frequency": num_counts,
-        "joker_frequency": joker_counts if game == "joker" else {}
+        "joker_frequency": joker_counts if game == "joker" else {},
+        "numbers": num_counts,
+        "jokers": joker_counts
     }
 
 
@@ -290,7 +297,6 @@ def get_frequencies(
 def get_repetitions(
     game: str = Query("joker", regex="^(joker|lotto)$")
 ):
-    """Συγκρίνει τις τελευταίες 10 κληρώσεις με τις αμέσως προηγούμενες 10 για εύρεση κοινών αριθμών."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -304,7 +310,7 @@ def get_repetitions(
     conn.close()
 
     if len(rows) < 20:
-        return {"status": "error", "message": "Not enough draws for repetition analysis (needs at least 20)"}
+        return {"status": "error", "message": "Not enough draws for repetition analysis"}
 
     recent_10 = rows[:10]
     previous_10 = rows[10:20]
@@ -328,6 +334,43 @@ def get_repetitions(
         "previous_period_count": len(previous_10),
         "common_numbers_count": len(common_numbers),
         "common_numbers": common_numbers
+    }
+
+
+@app.get("/api/generate")
+def generate_ticket(
+    game: str = Query("joker", regex="^(joker|lotto)$"),
+    mode: str = Query("random", regex="^(random|smart)$")
+):
+    max_num = 45 if game == "joker" else 49
+    needed_main = 5 if game == "joker" else 6
+
+    if mode == "random":
+        main_numbers = sorted(random.sample(range(1, max_num + 1), needed_main))
+        joker_number = random.randint(1, 20) if game == "joker" else None
+    else:
+        # Smart Generator: Επιλογή βάσει συχνότητας
+        stats = get_stats(game=game, year="all")
+        freqs = stats.get("numbers_frequency", {})
+        
+        # Ταξινομούμε τους αριθμούς βάσει συχνότητας
+        sorted_nums = sorted(freqs.keys(), key=lambda x: freqs[x], reverse=True)
+        top_pool = sorted_nums[:20] if len(sorted_nums) >= 20 else list(range(1, max_num + 1))
+        
+        main_numbers = sorted(random.sample(top_pool, needed_main))
+        
+        joker_number = None
+        if game == "joker":
+            j_freqs = stats.get("joker_frequency", {})
+            sorted_jokers = sorted(j_freqs.keys(), key=lambda x: j_freqs[x], reverse=True)
+            top_jokers = sorted_jokers[:8] if len(sorted_jokers) >= 8 else list(range(1, 21))
+            joker_number = random.choice(top_jokers)
+
+    return {
+        "game": game,
+        "mode": mode,
+        "numbers": main_numbers,
+        "joker": joker_number
     }
 
 
