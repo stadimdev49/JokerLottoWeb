@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Joker & Lotto Analytics Pro</title>
+    <title>Lottery Stats & Generator Platform</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -11,7 +11,7 @@
 
 <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom mb-4">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="#">🎰 Lottery Analytics Pro</a>
+        <a class="navbar-brand fw-bold" href="#">🎰 Lottery Stats Platform</a>
         <div class="d-flex align-items-center gap-3">
             <div class="navbar-nav flex-row gap-2">
                 <a class="nav-link active fw-bold" href="#" data-game="joker">Τζόκερ</a>
@@ -23,22 +23,39 @@
 </nav>
 
 <div class="container mb-5">
+    
+    <!-- Top Stats -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm p-3 d-flex flex-row justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-1">Συνολικές Κληρώσεις στη Βάση</h5>
+                    <p class="text-muted mb-0">Αυτόματος συγχρονισμός 2 φορές το 24ωρο</p>
+                </div>
+                <h2 class="text-primary fw-bold mb-0" id="total-draws">0</h2>
+            </div>
+        </div>
+    </div>
 
+    <!-- Navigation Tabs -->
     <ul class="nav nav-pills mb-4" id="mainTabs" role="tablist">
         <li class="nav-item">
-            <button class="nav-link active" id="tab-analysis" data-bs-toggle="pill" data-bs-target="#panel-analysis">📊 Ανάλυση 10 Κληρώσεων</button>
+            <button class="nav-link active" id="tab-rep" data-bs-toggle="pill" data-bs-target="#panel-rep">📊 Ανάλυση 10 Κληρώσεων</button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" id="tab-generator" data-bs-toggle="pill" data-bs-target="#panel-generator">🎲 Γεννήτρια Αριθμών</button>
+            <button class="nav-link" id="tab-freq" data-bs-toggle="pill" data-bs-target="#panel-freq">📈 Συχνότητες Αριθμών</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="tab-gen" data-bs-toggle="pill" data-bs-target="#panel-gen">🎲 Γεννήτρια Αριθμών</button>
         </li>
     </ul>
 
     <div class="tab-content">
         
-        <!-- PANEL 1: ΑΝΑΛΥΣΗ ΤΕΛΕΥΤΑΙΩΝ 10 ΚΛΗΡΩΣΕΩΝ -->
-        <div class="tab-pane fade show active" id="panel-analysis">
+        <!-- PANEL 1: REPETITIONS ANALYSIS -->
+        <div class="tab-pane fade show active" id="panel-rep">
             <div class="card shadow-sm p-4 mb-4">
-                <h5 class="card-title mb-3">Τελευταίες 10 Κληρώσεις & Συχνότητα στις Προηγούμενες</h5>
+                <h5 class="card-title mb-3">Ανάλυση Εμφανίσεων/Απουσιών (Τελευταίες 10 Κληρώσεις)</h5>
                 <div class="mb-3 d-flex gap-2 flex-wrap">
                     <span class="badge cat-absent p-2">Απουσία (0)</span>
                     <span class="badge cat-1 p-2">1 Εμφάνιση</span>
@@ -51,11 +68,10 @@
                             <tr>
                                 <th>Κλήρωση</th>
                                 <th>Ημερομηνία</th>
-                                <th>Αριθμοί & Κατηγορία Εμφάνισης</th>
-                                <th>Joker</th>
+                                <th>Αριθμοί & Κατηγορία Εμφάνισης στις Προηγούμενες 10</th>
                             </tr>
                         </thead>
-                        <tbody id="analysis-tbody">
+                        <tbody id="rep-tbody">
                             <!-- Populated via JS -->
                         </tbody>
                     </table>
@@ -63,39 +79,54 @@
             </div>
         </div>
 
-        <!-- PANEL 2: ΓΕΝΝΗΤΡΙΑ ΜΕ ΚΑΝΟΝΕΣ -->
-        <div class="tab-pane fade" id="panel-generator">
+        <!-- PANEL 2: FREQUENCIES -->
+        <div class="tab-pane fade" id="panel-freq">
+            <div class="card shadow-sm p-4 mb-4">
+                <h5 class="card-title mb-3">Συχνότητα Εμφάνισης Βασικών Αριθμών</h5>
+                <div id="main-freq-grid" class="stat-grid"></div>
+            </div>
+            <div class="card shadow-sm p-4 mb-4" id="joker-freq-container">
+                <h5 class="card-title mb-3">Συχνότητα Εμφάνισης Αριθμών Τζόκερ</h5>
+                <div id="joker-freq-grid" class="stat-grid"></div>
+            </div>
+        </div>
+
+        <!-- PANEL 3: GENERATOR -->
+        <div class="tab-pane fade" id="panel-gen">
             <div class="card shadow-sm p-4">
-                <h5 class="card-title mb-4">Έξυπνη Γεννήτρια Δεδομένων</h5>
+                <h5 class="card-title mb-4">Δημιουργία Δελτίου</h5>
                 
                 <div class="row g-3 mb-4">
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold">Τύπος Παραγωγής:</label>
-                        <select id="gen-mode" class="form-select">
-                            <option value="random">🎲 Πλήρως Τυχαία</option>
-                            <option value="rules">🧠 Βάσει Κανόνων / Στατιστικών</option>
-                        </select>
+                    <div class="col-md-6">
+                        <div class="card p-3 h-100">
+                            <h6>🎲 Απλή Τυχαία Γεννήτρια</h6>
+                            <p class="text-muted small">Δημιουργία τυχαίων αριθμών χωρίς περιορισμούς.</p>
+                            <button id="btn-gen-random" class="btn btn-outline-primary mt-auto">Παραγωγή Τυχαίου</button>
+                        </div>
                     </div>
-
-                    <div class="col-md-4 rules-option d-none">
-                        <label class="form-label fw-bold">Εύρος Ιστορικού (Κληρώσεις):</label>
-                        <input type="number" id="gen-lookback" class="form-control" value="10" min="5" max="100">
-                    </div>
-
-                    <div class="col-md-4 rules-option d-none">
-                        <label class="form-label fw-bold">Στρατηγική:</label>
-                        <select id="gen-rule-type" class="form-select">
-                            <option value="hot">🔥 Θερμοί (Με τις περισσότερες εμφανίσεις)</option>
-                            <option value="cold">❄️ Ψυχροί (Μεγάλες απουσίες)</option>
-                            <option value="balanced">⚖️ Ισορροπημένο (3 Θερμοί + 2 Ψυχροί)</option>
-                        </select>
+                    <div class="col-md-6">
+                        <div class="card p-3 h-100">
+                            <h6>🧠 Γεννήτρια με Κανόνες</h6>
+                            <div id="rules-container" class="mb-2">
+                                <div class="rule-row row g-2 mb-2">
+                                    <div class="col-4">
+                                        <input type="number" class="form-control form-control-sm rule-count" value="2" placeholder="Πλήθος">
+                                    </div>
+                                    <div class="col-4">
+                                        <input type="number" class="form-control form-control-sm rule-min-delay" value="0" placeholder="Min Απουσία">
+                                    </div>
+                                    <div class="col-4">
+                                        <input type="number" class="form-control form-control-sm rule-max-delay" value="5" placeholder="Max Απουσία">
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="btn-gen-rules" class="btn btn-primary mt-auto">Παραγωγή με Κανόνες</button>
+                        </div>
                     </div>
                 </div>
 
-                <button id="btn-generate" class="btn btn-primary btn-lg w-100 mb-4">Παραγωγή Δελτίου</button>
-
                 <div id="gen-result" class="p-4 bg-body-tertiary rounded text-center border">
-                    <em class="text-muted">Επιλέξτε παραμέτρους και πατήστε "Παραγωγή Δελτίου"</em>
+                    <em class="text-muted">Πατήστε ένα κουμπί για παραγωγή δελτίου</em>
                 </div>
             </div>
         </div>
