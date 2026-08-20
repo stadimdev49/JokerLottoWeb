@@ -24,7 +24,7 @@
 
 <div class="container mb-5">
     
-    <!-- Header Stats -->
+    <!-- Top Header Stats -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow-sm p-3 d-flex flex-row justify-content-between align-items-center">
@@ -79,19 +79,31 @@
             </div>
         </div>
 
-        <!-- PANEL 2: FREQUENCIES (ΠΛΗΡΩΣ ΛΕΙΤΟΥΡΓΙΚΟ) -->
+        <!-- PANEL 2: FREQUENCIES (ΜΕ ΕΠΙΛΟΓΗ ΕΤΟΥΣ) -->
         <div class="tab-pane fade" id="panel-freq">
             <div class="card shadow-sm p-4 mb-4">
-                <h5 class="card-title mb-3">Συχνότητα Εμφάνισης Βασικών Αριθμών</h5>
-                <div id="main-freq-grid" class="stat-grid"></div>
-            </div>
-            <div class="card shadow-sm p-4 mb-4" id="joker-freq-container">
-                <h5 class="card-title mb-3">Συχνότητα Εμφάνισης Αριθμών Τζόκερ</h5>
-                <div id="joker-freq-grid" class="stat-grid"></div>
+                <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                    <h5 class="card-title mb-0">Συχνότητα Εμφάνισης Αριθμών</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <label for="year-select" class="fw-bold mb-0">Επιλογή Έτους:</label>
+                        <select id="year-select" class="form-select w-auto">
+                            <option value="all">Συνολικά (Όλα τα έτη)</option>
+                            <!-- Dynamically filled with years -->
+                        </select>
+                    </div>
+                </div>
+
+                <h6 class="fw-bold text-secondary mb-3">Βασικοί Αριθμοί</h6>
+                <div id="main-freq-grid" class="stat-grid mb-4"></div>
+
+                <div id="joker-freq-container">
+                    <h6 class="fw-bold text-secondary mb-3">Αριθμοί Τζόκερ</h6>
+                    <div id="joker-freq-grid" class="stat-grid"></div>
+                </div>
             </div>
         </div>
 
-        <!-- PANEL 3: GENERATORS (ΔΥΟ ΓΕΝΝΗΤΡΙΕΣ) -->
+        <!-- PANEL 3: GENERATORS -->
         <div class="tab-pane fade" id="panel-gen">
             <div class="card shadow-sm p-4">
                 <h5 class="card-title mb-4">Δημιουργία Δελτίου</h5>
@@ -110,7 +122,7 @@
                     <div class="col-md-6">
                         <div class="card p-3 h-100 border">
                             <h6 class="fw-bold">🧠 2. Έξυπνη Γεννήτρια με Κανόνες Καθυστερήσεων</h6>
-                            <p class="text-muted small">Ορίστε πόσους αριθμούς θέλετε από συγκεκριμένα εύρη καθυστέρησης (απουσίας):</p>
+                            <p class="text-muted small">Ορίστε πόσους αριθμούς θέλετε από συγκεκριμένα εύρη απουσίας (καθυστέρησης):</p>
                             
                             <div id="rules-container" class="mb-3">
                                 <div class="rule-row bg-body-tertiary p-2 rounded mb-2">
