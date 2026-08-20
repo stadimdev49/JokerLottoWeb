@@ -18,7 +18,6 @@ GAME_IDS = {
     "lotto": 5103
 }
 
-# Αρχικοποίηση APScheduler
 scheduler = BackgroundScheduler()
 
 def init_db():
@@ -116,26 +115,21 @@ def sync_game_data(game_type: str):
     return total_inserted
 
 def scheduled_sync_job():
-    """Περιοδικός συγχρονισμός 2 φορές το 24ωρο (09:00 & 23:00)."""
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Έναρξη προγραμματισμένου συγχρονισμού...")
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Αυτόματος συγχρονισμός...")
     j_new = sync_game_data("joker")
     l_new = sync_game_data("lotto")
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Ολοκλήρωση: +{j_new} Τζόκερ, +{l_new} Lotto.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- STARTUP LOGIC ---
     init_db()
     sync_game_data("joker")
     sync_game_data("lotto")
     
-    # Αυτόματος συγχρονισμός 2 φορές την ημέρα (στις 09:00 και στις 23:00)
     scheduler.add_job(scheduled_sync_job, 'cron', hour='9,23', minute='0')
     scheduler.start()
     
-    yield  # Η εφαρμογή τρέχει και δέχεται αιτήματα
-    
-    # --- SHUTDOWN LOGIC ---
+    yield
     scheduler.shutdown()
 
 app = FastAPI(title="Lottery Stats Platform", lifespan=lifespan)
@@ -180,7 +174,7 @@ async def get_stats(game: str = "joker", year: Optional[str] = "all"):
     for row in rows:
         limit = 5 if game == "joker" else 6
         for num in row[:limit]:
-            if num in frequencies:
+            if num is not None and num in frequencies:
                 frequencies[num] += 1
         
         if game == "joker" and row[6] is not None:
@@ -300,7 +294,7 @@ async def generate_numbers_by_rules(request: Request):
 
     delays = {i: 9999 for i in range(1, max_num + 1)}
     for index, draw in enumerate(draws):
-        main_draw_nums = draw[:limit_nums]
+        main_draw_nums = [n for n in draw[:limit_nums] if n is not None]
         for num in range(1, max_num + 1):
             if num in main_draw_nums and delays[num] == 9999:
                 delays[num] = index
@@ -312,8 +306,6 @@ async def generate_numbers_by_rules(request: Request):
         count_needed = int(rule.get("count", 1))
         min_delay = rule.get("min_delay")
         max_delay = rule.get("max_delay")
-        exact_app = rule.get("exact_appearances")
-        window = rule.get("window")
 
         candidates = []
 
@@ -327,12 +319,6 @@ async def generate_numbers_by_rules(request: Request):
                 valid = False
             if max_delay is not None and max_delay != "" and delays[num] > int(max_delay):
                 valid = False
-
-            if valid and window is not None and window != "" and exact_app is not None and exact_app != "":
-                window_draws = draws[:int(window)]
-                appearances = sum(1 for d in window_draws if num in d[:limit_nums])
-                if appearances != int(exact_app):
-                    valid = False
 
             if valid:
                 candidates.append(num)
