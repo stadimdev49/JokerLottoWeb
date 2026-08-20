@@ -22,7 +22,7 @@ body {
     color: #000000 !important;
 }
 
-/* Grid για τις Συχνότητες Αριθμών */
+/* Stat Cards for Frequencies */
 .stat-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
@@ -48,7 +48,7 @@ body {
     color: #6c757d; 
 }
 
-/* Badge Categories για την Ανάλυση Επαναλήψεων */
+/* Category Colors */
 .cat-absent { background-color: #dc3545 !important; color: white !important; }
 .cat-1 { background-color: #0dcaf0 !important; color: black !important; }
 .cat-2 { background-color: #fd7e14 !important; color: white !important; }
