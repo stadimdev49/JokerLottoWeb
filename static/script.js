@@ -26,17 +26,42 @@ document.addEventListener("DOMContentLoaded", function () {
             document.querySelectorAll(".navbar-nav .nav-link").forEach(l => l.classList.remove("active"));
             this.classList.add("active");
             currentGame = this.getAttribute("data-game");
+            
+            // Reload available years for the selected game and refresh views
+            loadYears();
             loadAllData();
         });
     });
 
-    // Φόρτωση όλων των δεδομένων κατά την εναλλαγή ή έναρξη
-    function loadAllData() {
-        loadRepetitions();
-        loadStats();
+    // --- YEAR SELECTOR CONTROLLER ---
+    const yearSelect = document.getElementById("year-select");
+    yearSelect.addEventListener("change", function () {
+        loadStats(this.value);
+    });
+
+    function loadYears() {
+        fetch(`/api/years?game=${currentGame}`)
+            .then(res => res.json())
+            .then(data => {
+                yearSelect.innerHTML = '<option value="all">Συνολικά (Όλα τα έτη)</option>';
+                if (data.years) {
+                    data.years.forEach(yr => {
+                        const opt = document.createElement("option");
+                        opt.value = yr;
+                        opt.textContent = yr;
+                        yearSelect.appendChild(opt);
+                    });
+                }
+            })
+            .catch(err => console.error("Error loading years:", err));
     }
 
-    // 1. ΑΝΑΛΥΣΗ ΕΠΑΝΑΛΗΨΕΩΝ
+    function loadAllData() {
+        loadRepetitions();
+        loadStats(yearSelect.value || "all");
+    }
+
+    // 1. REPETITIONS ANALYSIS
     function loadRepetitions() {
         fetch(`/api/stats/repetitions?game=${currentGame}`)
             .then(res => res.json())
@@ -74,9 +99,9 @@ document.addEventListener("DOMContentLoaded", function () {
             .catch(err => console.error("Repetitions error:", err));
     }
 
-    // 2. ΣΥΧΝΟΤΗΤΕΣ ΑΡΙΘΜΩΝ
-    function loadStats() {
-        fetch(`/api/stats?game=${currentGame}&year=all`)
+    // 2. FREQUENCIES STATS
+    function loadStats(selectedYear = "all") {
+        fetch(`/api/stats?game=${currentGame}&year=${selectedYear}`)
             .then(res => res.json())
             .then(data => {
                 document.getElementById("total-draws").innerText = data.total_draws || 0;
@@ -110,22 +135,23 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    // 3. ΓΕΝΝΗΤΡΙΕΣ ΑΡΙΘΜΩΝ
-    // Α) Τυχαία Γεννήτρια
+    // 3. GENERATORS
+    // A) Random Generator
     document.getElementById("btn-gen-random").addEventListener("click", () => {
         fetch(`/api/generate/random?game=${currentGame}`)
             .then(res => res.json())
-            .then(data => displayGenerated(data, "Τυχαία Παραγωγή"));
+            .then(data => displayGenerated(data, "Τυχαία Παραγωγή"))
+            .catch(err => console.error("Random Generator Error:", err));
     });
 
-    // Β) Γεννήτρια με Κανόνες
+    // B) Rules Generator
     document.getElementById("btn-gen-rules").addEventListener("click", () => {
         const ruleRows = document.querySelectorAll(".rule-row");
         const rules = [];
 
         ruleRows.forEach(row => {
             rules.push({
-                count: row.querySelector(".rule-count").value,
+                count: parseInt(row.querySelector(".rule-count").value) || 1,
                 min_delay: row.querySelector(".rule-min-delay").value,
                 max_delay: row.querySelector(".rule-max-delay").value
             });
@@ -137,13 +163,14 @@ document.addEventListener("DOMContentLoaded", function () {
             body: JSON.stringify({ game: currentGame, rules: rules })
         })
             .then(res => res.json())
-            .then(data => displayGenerated(data, "Παραγωγή με Κανόνες"));
+            .then(data => displayGenerated(data, "Παραγωγή με Κανόνες"))
+            .catch(err => console.error("Rules Generator Error:", err));
     });
 
     function displayGenerated(data, modeTitle) {
         const resContainer = document.getElementById("gen-result");
-        if (data.status !== "success") {
-            resContainer.innerHTML = `<span class="text-danger">Σφάλμα κατά την παραγωγή δελτίου.</span>`;
+        if (!data || data.status !== "success") {
+            resContainer.innerHTML = `<span class="text-danger">Σφάλμα κατά την παραγωγή δελτίου: ${data.message || 'Άγνωστο σφάλμα'}</span>`;
             return;
         }
 
@@ -152,10 +179,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         resContainer.innerHTML = `
             <h6 class="text-muted mb-3">Προτεινόμενο Δελτίο (${modeTitle})</h6>
-            <div class="d-flex justify-content-center align-items-center gap-1">${mainBalls} ${jokerBall}</div>
+            <div class="d-flex justify-content-center align-items-center gap-1 flex-wrap">${mainBalls} ${jokerBall}</div>
         `;
     }
 
-    // Αρχική Φόρτωση
+    // Initial Initialization
+    loadYears();
     loadAllData();
 });
