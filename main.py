@@ -59,10 +59,6 @@ init_db()
 # OPAP API SYNC ENGINE
 # ==========================================
 def sync_game_data(game_type: str) -> int:
-    """
-    Κατεβάζει κληρώσεις από το API του ΟΠΑΠ με υποστήριξη Browser Headers
-    και έξυπνο Incremental Sync από την τελευταία γνωστή ημερομηνία.
-    """
     game_id = GAME_IDS.get(game_type)
     if not game_id:
         return 0
@@ -73,12 +69,10 @@ def sync_game_data(game_type: str) -> int:
     now = datetime.now()
     current_year = now.year
 
-    # 1. Βρίσκουμε την τελευταία ημερομηνία κλήρωσης στη βάση
     cursor.execute("SELECT MAX(draw_date) FROM draws WHERE game_type = ?", (game_type,))
     row = cursor.fetchone()
     last_date = row[0] if row else None
 
-    # Αν η βάση είναι άδεια, ξεκινάμε από το 2020. Αλλιώς από τη χρονιά του last_date.
     start_year = 2020
     if last_date:
         try:
@@ -88,7 +82,6 @@ def sync_game_data(game_type: str) -> int:
 
     total_inserted = 0
 
-    # Headers για αποφυγή 403 Forbidden από Datacenters (Render/Cloud)
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
@@ -113,7 +106,7 @@ def sync_game_data(game_type: str) -> int:
             try:
                 res = requests.get(url, headers=headers, timeout=12)
                 if res.status_code != 200:
-                    print(f"[SYNC WARN] API Returned Status {res.status_code} for {game_type} ({start_date})")
+                    print(f"[SYNC WARN] API Status {res.status_code} for {game_type} ({start_date})")
                     continue
 
                 data = res.json()
@@ -153,7 +146,7 @@ def sync_game_data(game_type: str) -> int:
                 total_inserted += inserted_this_month
 
             except Exception as e:
-                print(f"[SYNC ERROR] Failed to fetch {game_type} for {start_date}: {e}")
+                print(f"[SYNC ERROR] Failed for {game_type} ({start_date}): {e}")
 
     conn.close()
     print(f"[SYNC SUCCESS] Fetched {total_inserted} new draws for {game_type}.")
@@ -161,23 +154,20 @@ def sync_game_data(game_type: str) -> int:
 
 
 def scheduled_sync_job():
-    print("[SCHEDULER] Running periodic draw sync...")
+    print("[SCHEDULER] Running periodic sync...")
     sync_game_data("joker")
     sync_game_data("lotto")
 
 
 # ==========================================
-# LIFESPAN & BACKGROUND SCHEDULER
+# LIFESPAN & SCHEDULER
 # ==========================================
 scheduler = BackgroundScheduler()
 
 @app.on_event("startup")
 def startup_event():
-    # Εκτέλεση συγχρονισμού κατά την εκκίνηση
-    print("[STARTUP] Initializing Database & Executing Startup Sync...")
+    print("[STARTUP] Syncing Game Data...")
     scheduled_sync_job()
-    
-    # Προγραμματισμός ανά 12 ώρες
     scheduler.add_job(scheduled_sync_job, 'interval', hours=12)
     scheduler.start()
 
@@ -187,7 +177,7 @@ def shutdown_event():
 
 
 # ==========================================
-# FRONTEND ROUTES
+# FRONTEND ROUTE
 # ==========================================
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
@@ -198,13 +188,11 @@ def read_root(request: Request):
 # REST API ENDPOINTS
 # ==========================================
 @app.get("/api/sync")
-def trigger_sync(background_tasks: BackgroundTasks):
-    """Χειροκίνητος συγχρονισμός μέσω API endpoint."""
+def trigger_sync():
     j_added = sync_game_data("joker")
     l_added = sync_game_data("lotto")
     return {
         "status": "success",
-        "message": "Sync completed successfully",
         "joker_inserted": j_added,
         "lotto_inserted": l_added
     }
@@ -245,30 +233,26 @@ def get_draws(
     return {"game": game, "total": len(result), "draws": result}
 
 
-@app.get("/api/stats/frequencies")
-def get_frequencies(
+@app.get("/api/stats")
+def get_stats(
     game: str = Query("joker", regex="^(joker|lotto)$"),
-    limit: int = Query(100, ge=5, le=2000)
+    year: str = Query("all")
 ):
+    """Επιστρέφει γενικά στατιστικά συχνότητας με υποστήριξη φίλτρου έτους."""
     max_num = 45 if game == "joker" else 49
     max_joker = 20 if game == "joker" else 20
 
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
-    if game == "joker":
-        cursor.execute('''
-            SELECT num1, num2, num3, num4, num5, joker
-            FROM draws WHERE game_type = ?
-            ORDER BY draw_date DESC, draw_id DESC LIMIT ?
-        ''', (game, limit))
-    else:
-        cursor.execute('''
-            SELECT num1, num2, num3, num4, num5, num6, joker
-            FROM draws WHERE game_type = ?
-            ORDER BY draw_date DESC, draw_id DESC LIMIT ?
-        ''', (game, limit))
+    query = "SELECT num1, num2, num3, num4, num5, num6, joker FROM draws WHERE game_type = ?"
+    params = [game]
 
+    if year != "all":
+        query += " AND strftime('%Y', draw_date) = ?"
+        params.append(str(year))
+
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
 
@@ -276,8 +260,8 @@ def get_frequencies(
     joker_counts = {i: 0 for i in range(1, max_joker + 1)}
 
     for r in rows:
-        main_nums = r[:-1]
-        j_val = r[-1]
+        main_nums = r[:5] if game == "joker" else r[:6]
+        j_val = r[6]
 
         for n in main_nums:
             if n and 1 <= n <= max_num:
@@ -287,9 +271,63 @@ def get_frequencies(
 
     return {
         "game": game,
-        "sample_size": len(rows),
+        "year": year,
+        "total_draws": len(rows),
         "numbers_frequency": num_counts,
         "joker_frequency": joker_counts if game == "joker" else {}
+    }
+
+
+@app.get("/api/stats/frequencies")
+def get_frequencies(
+    game: str = Query("joker", regex="^(joker|lotto)$"),
+    limit: int = Query(100, ge=5, le=2000)
+):
+    return get_stats(game=game, year="all")
+
+
+@app.get("/api/stats/repetitions")
+def get_repetitions(
+    game: str = Query("joker", regex="^(joker|lotto)$")
+):
+    """Συγκρίνει τις τελευταίες 10 κληρώσεις με τις αμέσως προηγούμενες 10 για εύρεση κοινών αριθμών."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT num1, num2, num3, num4, num5, num6, joker
+        FROM draws WHERE game_type = ?
+        ORDER BY draw_date DESC, draw_id DESC LIMIT 20
+    ''', (game,))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    if len(rows) < 20:
+        return {"status": "error", "message": "Not enough draws for repetition analysis (needs at least 20)"}
+
+    recent_10 = rows[:10]
+    previous_10 = rows[10:20]
+
+    def extract_nums(draw_list):
+        s = set()
+        for r in draw_list:
+            nums = r[:5] if game == "joker" else r[:6]
+            for n in nums:
+                if n:
+                    s.add(n)
+        return s
+
+    set_recent = extract_nums(recent_10)
+    set_previous = extract_nums(previous_10)
+    common_numbers = sorted(list(set_recent.intersection(set_previous)))
+
+    return {
+        "game": game,
+        "recent_period_count": len(recent_10),
+        "previous_period_count": len(previous_10),
+        "common_numbers_count": len(common_numbers),
+        "common_numbers": common_numbers
     }
 
 
