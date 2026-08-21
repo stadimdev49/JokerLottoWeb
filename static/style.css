@@ -245,6 +245,7 @@ nav {
     justify-content: center;
     gap: 10px;
     margin-top: 10px;
+    flex-wrap: wrap;
 }
 
 .generated-ball {
