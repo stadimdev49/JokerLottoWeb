@@ -154,7 +154,7 @@ function addRuleRow() {
     const rowHtml = `
         <div class="rule-row" id="rule-${rowId}">
             <span>Θέλω</span>
-            <input type="number" class="rule-count" value="2" min="1" max="5" style="width: 50px;">
+            <input type="number" class="rule-count" value="2" min="1" max="10" style="width: 50px;">
             <span>αριθμούς με</span>
 
             <select class="rule-type" onchange="toggleRuleInputs(${rowId}, this.value)">
@@ -223,6 +223,12 @@ async function generateRulesTicket() {
 
         const data = await res.json();
         if (data.status === 'success') {
+            const titleElement = document.getElementById('rulesResultTitle');
+            if (data.numbers.length === 0) {
+                titleElement.textContent = "Δεν βρέθηκε κανένας αριθμός που να πληροί τους κανόνες.";
+            } else {
+                titleElement.textContent = `Παράχθηκαν ${data.numbers.length} αριθμοί που πληρούν τους κανόνες:`;
+            }
             renderBalls('rulesTicketBalls', 'rulesResultBox', data.numbers, data.joker);
         }
     } catch (err) {
@@ -243,7 +249,7 @@ function renderBalls(containerId, boxId, numbers, joker) {
         container.appendChild(ball);
     });
 
-    if (joker) {
+    if (joker && numbers.length > 0) {
         const jBall = document.createElement('div');
         jBall.className = 'generated-ball joker-ball';
         jBall.textContent = joker;
