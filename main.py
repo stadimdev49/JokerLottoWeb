@@ -18,6 +18,7 @@ GAME_IDS = {
     "lotto": 5103
 }
 
+# Αρχικοποίηση APScheduler
 scheduler = BackgroundScheduler()
 
 def init_db():
@@ -37,6 +38,7 @@ def init_db():
     conn.close()
 
 def sync_game_data(game_type: str):
+    """Πλήρης συγχρονισμός ιστορικού δεδομένων (από το 2010 έως σήμερα)."""
     game_id = GAME_IDS.get(game_type)
     if not game_id:
         return 0
@@ -114,22 +116,97 @@ def sync_game_data(game_type: str):
     conn.close()
     return total_inserted
 
+def sync_recent_draws(game_type: str):
+    """
+    Γρήγορος συγχρονισμός μόνο για τον τρέχοντα μήνα (για τις περιοδικές ενημερώσεις 2 φορές την ημέρα).
+    """
+    game_id = GAME_IDS.get(game_type)
+    if not game_id:
+        return 0
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    now = datetime.now()
+    start_date = f"{now.year}-{now.month:02d}-01"
+    end_date = now.strftime("%Y-%m-%d")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept": "application/json"
+    }
+
+    url = f"https://api.opap.gr/draws/v3.0/{game_id}/draw-date/{start_date}/{end_date}"
+    inserted_count = 0
+
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            data = res.json()
+            draws = data.get('content', []) if isinstance(data, dict) else data
+
+            for draw in draws:
+                draw_id = draw.get('drawId')
+                draw_time_raw = draw.get('drawTime')
+                
+                if isinstance(draw_time_raw, int):
+                    draw_date = datetime.fromtimestamp(draw_time_raw / 1000).strftime('%Y-%m-%d')
+                elif isinstance(draw_time_raw, str):
+                    draw_date = draw_time_raw.split("T")[0]
+                else:
+                    draw_date = start_date
+
+                winning_numbers = draw.get('winningNumbers', {})
+                list_nums = winning_numbers.get('list', [])
+                bonus_nums = winning_numbers.get('bonus', [])
+
+                if len(list_nums) >= 5:
+                    num1, num2, num3, num4, num5 = list_nums[:5]
+                    num6 = list_nums[5] if len(list_nums) > 5 else None
+                    joker = bonus_nums[0] if bonus_nums else None
+
+                    cursor.execute('''
+                        INSERT OR IGNORE INTO draws 
+                        (game_type, draw_id, draw_date, num1, num2, num3, num4, num5, num6, joker)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (game_type, draw_id, draw_date, num1, num2, num3, num4, num5, num6, joker))
+                    
+                    if cursor.rowcount > 0:
+                        inserted_count += 1
+
+            conn.commit()
+    except Exception as e:
+        print(f"Σφάλμα κατά τον συγχρονισμό {game_type}: {e}")
+
+    conn.close()
+    return inserted_count
+
 def scheduled_sync_job():
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Αυτόματος συγχρονισμός...")
-    j_new = sync_game_data("joker")
-    l_new = sync_game_data("lotto")
+    """Περιοδικός συγχρονισμός 2 φορές την ημέρα."""
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Έναρξη προγραμματισμένης ενημέρωσης κληρώσεων...")
+    j_new = sync_recent_draws("joker")
+    l_new = sync_recent_draws("lotto")
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Ολοκλήρωση: +{j_new} Τζόκερ, +{l_new} Lotto.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # --- STARTUP LOGIC ---
     init_db()
+    
+    # Πλήρης αρχικός συγχρονισμός κατά την εκκίνηση
     sync_game_data("joker")
     sync_game_data("lotto")
     
-    scheduler.add_job(scheduled_sync_job, 'cron', hour='9,23', minute='0')
+    # Προσθήκη εργασίας αυτόματου συγχρονισμού 2 φορές την ημέρα (κάθε 12 ώρες)
+    scheduler.add_job(scheduled_sync_job, 'interval', hours=12)
+    # Εναλλακτικά για συγκεκριμένες ώρες (π.χ. 15:00 & 23:00):
+    # scheduler.add_job(scheduled_sync_job, 'cron', hour='15,23', minute=0)
+    
     scheduler.start()
     
-    yield
+    yield  # Η εφαρμογή τρέχει και δέχεται αιτήματα
+    
+    # --- SHUTDOWN LOGIC ---
     scheduler.shutdown()
 
 app = FastAPI(title="Lottery Stats Platform", lifespan=lifespan)
@@ -141,19 +218,11 @@ templates = Jinja2Templates(directory="templates")
 async def read_root(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
 
-@app.get("/api/years")
-async def get_available_years(game: str = "joker"):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT DISTINCT strftime('%Y', draw_date) as yr 
-        FROM draws 
-        WHERE game_type = ? AND yr IS NOT NULL 
-        ORDER BY yr DESC
-    """, (game,))
-    years = [r[0] for r in cursor.fetchall()]
-    conn.close()
-    return {"status": "success", "years": years}
+@app.get("/api/sync")
+async def force_sync():
+    joker_new = sync_recent_draws("joker")
+    lotto_new = sync_recent_draws("lotto")
+    return {"status": "success", "joker_added": joker_new, "lotto_added": lotto_new}
 
 @app.get("/api/stats")
 async def get_stats(game: str = "joker", year: Optional[str] = "all"):
@@ -182,7 +251,7 @@ async def get_stats(game: str = "joker", year: Optional[str] = "all"):
     for row in rows:
         limit = 5 if game == "joker" else 6
         for num in row[:limit]:
-            if num is not None and num in frequencies:
+            if num in frequencies:
                 frequencies[num] += 1
         
         if game == "joker" and row[6] is not None:
@@ -192,12 +261,12 @@ async def get_stats(game: str = "joker", year: Optional[str] = "all"):
     return {
         "status": "success",
         "game": game,
-        "selected_year": year,
         "total_draws": total_draws,
         "frequencies": frequencies,
         "joker_frequencies": joker_frequencies
     }
 
+# Ανάλυση Επαναλήψεων (Τελευταίες 10 κληρώσεις vs Προηγούμενες 10)
 @app.get("/api/stats/repetitions")
 async def get_repetitions_stats(game: str = "joker"):
     conn = sqlite3.connect(DB_NAME)
@@ -224,15 +293,14 @@ async def get_repetitions_stats(game: str = "joker"):
         target_draw = rows[i]
         draw_id = target_draw[0]
         draw_date = target_draw[1]
-        target_numbers = [n for n in target_draw[2:2 + limit_nums] if n is not None]
+        target_numbers = target_draw[2:2 + limit_nums]
 
         previous_10_draws = rows[i + 1 : i + 11]
 
         prev_freq = {}
         for prev_draw in previous_10_draws:
             for num in prev_draw[2:2 + limit_nums]:
-                if num is not None:
-                    prev_freq[num] = prev_freq.get(num, 0) + 1
+                prev_freq[num] = prev_freq.get(num, 0) + 1
 
         breakdown = {"0": [], "1": [], "2": [], "3+": []}
 
@@ -250,7 +318,7 @@ async def get_repetitions_stats(game: str = "joker"):
         results.append({
             "draw_id": draw_id,
             "draw_date": draw_date,
-            "numbers": target_numbers,
+            "numbers": list(target_numbers),
             "counts": {
                 "zero": len(breakdown["0"]),
                 "one": len(breakdown["1"]),
@@ -266,6 +334,7 @@ async def get_repetitions_stats(game: str = "joker"):
         "repetitions": results
     }
 
+# 1. Απλή Τυχαία Γεννήτρια
 @app.get("/api/generate/random")
 async def generate_simple_random(game: str = "joker"):
     max_num = 45 if game == "joker" else 49
@@ -280,87 +349,93 @@ async def generate_simple_random(game: str = "joker"):
         "joker": joker
     }
 
+# 2. Έξυπνη Γεννήτρια με Κανόνες
 @app.post("/api/generate/rules")
 async def generate_numbers_by_rules(request: Request):
-    try:
-        data = await request.json()
-        game = data.get("game", "joker")
-        rules = data.get("rules", [])
+    data = await request.json()
+    game = data.get("game", "joker")
+    rules = data.get("rules", [])
 
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT num1, num2, num3, num4, num5, num6 
-            FROM draws 
-            WHERE game_type = ? 
-            ORDER BY draw_date DESC, draw_id DESC
-        """, (game,))
-        draws = cursor.fetchall()
-        conn.close()
+    cursor.execute("""
+        SELECT num1, num2, num3, num4, num5, num6 
+        FROM draws 
+        WHERE game_type = ? 
+        ORDER BY draw_date DESC, draw_id DESC
+    """, (game,))
+    draws = cursor.fetchall()
+    conn.close()
 
-        max_num = 45 if game == "joker" else 49
-        limit_nums = 5 if game == "joker" else 6
+    max_num = 45 if game == "joker" else 49
+    limit_nums = 5 if game == "joker" else 6
 
-        delays = {i: 9999 for i in range(1, max_num + 1)}
-        for index, draw in enumerate(draws):
-            main_draw_nums = [n for n in draw[:limit_nums] if n is not None]
-            for num in range(1, max_num + 1):
-                if num in main_draw_nums and delays[num] == 9999:
-                    delays[num] = index
+    delays = {i: 9999 for i in range(1, max_num + 1)}
+    for index, draw in enumerate(draws):
+        main_draw_nums = draw[:limit_nums]
+        for num in range(1, max_num + 1):
+            if num in main_draw_nums and delays[num] == 9999:
+                delays[num] = index
 
-        selected_numbers = []
-        used_numbers = set()
+    selected_numbers = []
+    used_numbers = set()
 
-        for rule in rules:
-            count_needed = int(rule.get("count", 1) or 1)
-            min_delay = rule.get("min_delay")
-            max_delay = rule.get("max_delay")
+    for rule in rules:
+        count_needed = int(rule.get("count", 1))
+        min_delay = rule.get("min_delay")
+        max_delay = rule.get("max_delay")
+        exact_app = rule.get("exact_appearances")
+        window = rule.get("window")
 
-            candidates = []
+        candidates = []
 
-            for num in range(1, max_num + 1):
-                if num in used_numbers:
-                    continue
+        for num in range(1, max_num + 1):
+            if num in used_numbers:
+                continue
 
-                valid = True
+            valid = True
 
-                if min_delay is not None and str(min_delay).strip() != "" and delays[num] < int(min_delay):
+            if min_delay is not None and min_delay != "" and delays[num] < int(min_delay):
+                valid = False
+            if max_delay is not None and max_delay != "" and delays[num] > int(max_delay):
+                valid = False
+
+            if valid and window is not None and window != "" and exact_app is not None and exact_app != "":
+                window_draws = draws[:int(window)]
+                appearances = sum(1 for d in window_draws if num in d[:limit_nums])
+                if appearances != int(exact_app):
                     valid = False
-                if max_delay is not None and str(max_delay).strip() != "" and delays[num] > int(max_delay):
-                    valid = False
 
-                if valid:
-                    candidates.append(num)
+            if valid:
+                candidates.append(num)
 
-            if len(candidates) < count_needed:
-                chosen = candidates
-            else:
-                chosen = random.sample(candidates, count_needed)
+        if len(candidates) < count_needed:
+            chosen = candidates
+        else:
+            chosen = random.sample(candidates, count_needed)
 
-            selected_numbers.extend(chosen)
-            used_numbers.update(chosen)
+        selected_numbers.extend(chosen)
+        used_numbers.update(chosen)
 
-        needed_total = 5 if game == "joker" else 6
-        while len(selected_numbers) < needed_total:
-            remaining = [n for n in range(1, max_num + 1) if n not in used_numbers]
-            if not remaining:
-                break
-            pick = random.choice(remaining)
-            selected_numbers.append(pick)
-            used_numbers.add(pick)
+    needed_total = 5 if game == "joker" else 6
+    while len(selected_numbers) < needed_total:
+        remaining = [n for n in range(1, max_num + 1) if n not in used_numbers]
+        if not remaining:
+            break
+        pick = random.choice(remaining)
+        selected_numbers.append(pick)
+        used_numbers.add(pick)
 
-        joker_number = random.randint(1, 20) if game == "joker" else None
-        selected_numbers.sort()
+    joker_number = random.randint(1, 20) if game == "joker" else None
+    selected_numbers.sort()
 
-        return {
-            "status": "success",
-            "numbers": selected_numbers,
-            "joker": joker_number
-        }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    return {
+        "status": "success",
+        "numbers": selected_numbers,
+        "joker": joker_number
+    }
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=10000)
+    uvicorn.run("main:app", host="127.0.0.1", port=8050, reload=True)
