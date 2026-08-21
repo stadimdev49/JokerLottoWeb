@@ -1,260 +1,254 @@
-document.addEventListener("DOMContentLoaded", () => {
-    // State Management
-    const state = {
-        game: "joker",
-        theme: localStorage.getItem("theme") || "light"
-    };
+let currentGame = 'joker';
+let chartInstance = null;
 
-    // --- 1. THEME TOGGLE ---
-    const htmlEl = document.documentElement;
-    const themeBtn = document.getElementById("btn-theme-toggle");
+document.addEventListener('DOMContentLoaded', () => {
+    populateYearDropdown();
+    loadStats();
+    loadRepetitions();
+    addRuleRow();
+});
 
-    function applyTheme(theme) {
-        state.theme = theme;
-        htmlEl.setAttribute("data-bs-theme", theme);
-        localStorage.setItem("theme", theme);
-        if (themeBtn) {
-            themeBtn.innerText = theme === "light" ? "🌙 Dark Mode" : "☀️ Light Mode";
+function populateYearDropdown() {
+    const yearSelect = document.getElementById('year-select');
+    const currentYear = new Date().getFullYear();
+    
+    for (let year = currentYear; year >= 2010; year--) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelect.appendChild(option);
+    }
+}
+
+function switchGame(game) {
+    currentGame = game;
+    
+    document.getElementById('btn-joker').classList.toggle('active', game === 'joker');
+    document.getElementById('btn-lotto').classList.toggle('active', game === 'lotto');
+    document.getElementById('active-game-label').textContent = game.toUpperCase();
+    
+    loadStats();
+    loadRepetitions();
+}
+
+async function loadStats() {
+    const year = document.getElementById('year-select').value;
+    
+    try {
+        const res = await fetch(`/api/stats?game=${currentGame}&year=${year}`);
+        const data = await res.json();
+
+        document.getElementById('total-draws-count').textContent = data.total_draws.toLocaleString();
+        
+        renderGrid(data.frequencies);
+        renderChart(data.frequencies);
+    } catch (err) {
+        console.error("Σφάλμα κατά τη φόρτωση των στατιστικών:", err);
+    }
+}
+
+async function loadRepetitions() {
+    try {
+        const res = await fetch(`/api/stats/repetitions?game=${currentGame}`);
+        const data = await res.json();
+
+        if (data.status === 'success') {
+            renderRepetitionTable(data.repetitions);
         }
+    } catch (err) {
+        console.error("Σφάλμα κατά τη φόρτωση των επαναλήψεων:", err);
+    }
+}
+
+function renderRepetitionTable(items) {
+    const tbody = document.getElementById('repetitionTableBody');
+    tbody.innerHTML = '';
+
+    items.forEach(item => {
+        const tr = document.createElement('tr');
+        
+        const numsStr = item.numbers.join(', ');
+
+        tr.innerHTML = `
+            <td><strong>#${item.draw_id}</strong><br><small style="color:var(--text-muted);">${item.draw_date}</small></td>
+            <td><span style="color:var(--accent-cyan); font-weight:bold;">${numsStr}</span></td>
+            <td><span class="badge-count badge-zero">${item.counts.zero}</span> <small>(${item.details['0'].join(',') || '-'})</small></td>
+            <td><span class="badge-count badge-one">${item.counts.one}</span> <small>(${item.details['1'].join(',') || '-'})</small></td>
+            <td><span class="badge-count badge-two">${item.counts.two}</span> <small>(${item.details['2'].join(',') || '-'})</small></td>
+            <td><span class="badge-count badge-three">${item.counts.three_plus}</span> <small>(${item.details['3+'].join(',') || '-'})</small></td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+}
+
+function renderGrid(frequencies) {
+    const grid = document.getElementById('numberGrid');
+    grid.innerHTML = '';
+
+    Object.entries(frequencies).forEach(([num, count]) => {
+        const div = document.createElement('div');
+        div.className = 'grid-num-card';
+        div.innerHTML = `
+            <span class="num-ball">${num}</span>
+            <span class="num-count">${count} εμφο.</span>
+        `;
+        grid.appendChild(div);
+    });
+}
+
+function renderChart(frequencies) {
+    const ctx = document.getElementById('frequencyChart').getContext('2d');
+    const labels = Object.keys(frequencies);
+    const values = Object.values(frequencies);
+
+    if (chartInstance) {
+        chartInstance.destroy();
     }
 
-    if (themeBtn) {
-        themeBtn.addEventListener("click", () => {
-            applyTheme(state.theme === "light" ? "dark" : "light");
-        });
-    }
-    applyTheme(state.theme);
+    const barColor = currentGame === 'joker' ? '#ffb703' : '#00f5d4';
 
-    // --- 2. GAME SWITCHING (Joker / Lotto) ---
-    const navLinks = document.querySelectorAll(".navbar-nav .nav-link");
-    navLinks.forEach(link => {
-        link.addEventListener("click", async (e) => {
-            e.preventDefault();
-            
-            navLinks.forEach(l => l.classList.remove("active"));
-            link.classList.add("active");
-
-            const newGame = link.getAttribute("data-game");
-            if (newGame && newGame !== state.game) {
-                state.game = newGame;
-                
-                // Reset Year Dropdown to "all"
-                const yearSelect = document.getElementById("year-select");
-                if (yearSelect) yearSelect.value = "all";
-
-                await refreshAll();
+    chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Συχνότητα Εμφάνισης',
+                data: values,
+                backgroundColor: barColor,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: { ticks: { color: '#8d99ae', font: { size: 10 } }, grid: { display: false } },
+                y: { ticks: { color: '#8d99ae' }, grid: { color: '#1f263e' } }
             }
-        });
+        }
+    });
+}
+
+/* 1. Απλή Τυχαία Γεννήτρια */
+async function generateSimpleTicket() {
+    try {
+        const res = await fetch(`/api/generate/random?game=${currentGame}`);
+        const data = await res.json();
+        if (data.status === 'success') {
+            renderBalls('simpleTicketBalls', 'simpleResultBox', data.numbers, data.joker);
+        }
+    } catch (err) {
+        console.error("Σφάλμα στην απλή γεννήτρια:", err);
+    }
+}
+
+/* 2. Έξυπνη Γεννήτρια με Κανόνες */
+function addRuleRow() {
+    const container = document.getElementById('rules-container');
+    const rowId = Date.now();
+
+    const rowHtml = `
+        <div class="rule-row" id="rule-${rowId}">
+            <span>Θέλω</span>
+            <input type="number" class="rule-count" value="2" min="1" max="5" style="width: 50px;">
+            <span>αριθμούς με</span>
+
+            <select class="rule-type" onchange="toggleRuleInputs(${rowId}, this.value)">
+                <option value="delay">Καθυστέρηση (Min)</option>
+                <option value="frequency">Εμφανίσεις σε παράθυρο N</option>
+            </select>
+
+            <span id="delay-inputs-${rowId}">
+                > <input type="number" class="rule-min-delay" value="10" style="width: 60px;"> εμφ.
+            </span>
+
+            <span id="freq-inputs-${rowId}" style="display: none;">
+                <input type="number" class="rule-exact-app" value="2" style="width: 50px;"> εμφ. στις 
+                <input type="number" class="rule-window" value="15" style="width: 60px;"> κληρώσεις
+            </span>
+
+            <button class="btn nav-btn" style="color: var(--accent-pink); padding: 2px 6px;" onclick="removeRule(${rowId})">✖</button>
+        </div>
+    `;
+
+    container.insertAdjacentHTML('beforeend', rowHtml);
+}
+
+function removeRule(rowId) {
+    const row = document.getElementById(`rule-${rowId}`);
+    if (row) row.remove();
+}
+
+function toggleRuleInputs(rowId, type) {
+    const delaySpan = document.getElementById(`delay-inputs-${rowId}`);
+    const freqSpan = document.getElementById(`freq-inputs-${rowId}`);
+
+    if (type === 'delay') {
+        delaySpan.style.display = 'inline';
+        freqSpan.style.display = 'none';
+    } else {
+        delaySpan.style.display = 'none';
+        freqSpan.style.display = 'inline';
+    }
+}
+
+async function generateRulesTicket() {
+    const rows = document.querySelectorAll('.rule-row');
+    const rules = [];
+
+    rows.forEach(row => {
+        const count = row.querySelector('.rule-count').value;
+        const type = row.querySelector('.rule-type').value;
+
+        if (type === 'delay') {
+            const minDelay = row.querySelector('.rule-min-delay').value;
+            rules.push({ count: count, min_delay: minDelay });
+        } else {
+            const exactApp = row.querySelector('.rule-exact-app').value;
+            const windowVal = row.querySelector('.rule-window').value;
+            rules.push({ count: count, exact_appearances: exactApp, window: windowVal });
+        }
     });
 
-    // --- 3. YEAR SELECTOR EVENT ---
-    const yearSelect = document.getElementById("year-select");
-    if (yearSelect) {
-        yearSelect.addEventListener("change", () => {
-            fetchStats(yearSelect.value);
+    try {
+        const res = await fetch('/api/generate/rules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game: currentGame, rules: rules })
         });
-    }
 
-    // --- 4. API FETCHERS ---
-
-    // A. Years Dropdown
-    async function fetchYears() {
-        const select = document.getElementById("year-select");
-        if (!select) return;
-
-        try {
-            const res = await fetch(`/api/years?game=${state.game}`);
-            if (!res.ok) throw new Error("Network response was not ok");
-            const data = await res.json();
-
-            // Clear existing options except 'all'
-            select.innerHTML = '<option value="all">Συνολικά (Όλα τα έτη)</option>';
-
-            if (data.status === "success" && Array.isArray(data.years)) {
-                data.years.forEach(yr => {
-                    const opt = document.createElement("option");
-                    opt.value = yr;
-                    opt.textContent = yr;
-                    select.appendChild(opt);
-                });
-            }
-        } catch (err) {
-            console.error("Error fetching years:", err);
+        const data = await res.json();
+        if (data.status === 'success') {
+            renderBalls('rulesTicketBalls', 'rulesResultBox', data.numbers, data.joker);
         }
+    } catch (err) {
+        console.error("Σφάλμα στην έξυπνη γεννήτρια:", err);
+    }
+}
+
+/* Κοινή συνάρτηση προβολής μπαλών */
+function renderBalls(containerId, boxId, numbers, joker) {
+    const container = document.getElementById(containerId);
+    const resultBox = document.getElementById(boxId);
+    container.innerHTML = '';
+
+    numbers.forEach(num => {
+        const ball = document.createElement('div');
+        ball.className = 'generated-ball';
+        ball.textContent = num;
+        container.appendChild(ball);
+    });
+
+    if (joker) {
+        const jBall = document.createElement('div');
+        jBall.className = 'generated-ball joker-ball';
+        jBall.textContent = joker;
+        container.appendChild(jBall);
     }
 
-    // B. Repetitions Analysis
-    async function fetchRepetitions() {
-        const tbody = document.getElementById("rep-tbody");
-        if (!tbody) return;
-
-        try {
-            const res = await fetch(`/api/stats/repetitions?game=${state.game}`);
-            const data = await res.json();
-
-            tbody.innerHTML = "";
-
-            if (data.status !== "success" || !data.repetitions || data.repetitions.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">Δεν υπάρχουν διαθέσιμα δεδομένα.</td></tr>`;
-                return;
-            }
-
-            data.repetitions.forEach(draw => {
-                const tr = document.createElement("tr");
-                const details = draw.details || {};
-                let ballsHtml = "";
-
-                draw.numbers.forEach(num => {
-                    let catClass = "cat-absent";
-                    if (details["1"] && details["1"].includes(num)) catClass = "cat-1";
-                    if (details["2"] && details["2"].includes(num)) catClass = "cat-2";
-                    if (details["3+"] && details["3+"].includes(num)) catClass = "cat-3plus";
-
-                    ballsHtml += `<span class="ball ${catClass}">${num}</span> `;
-                });
-
-                tr.innerHTML = `
-                    <td><strong>#${draw.draw_id}</strong></td>
-                    <td>${draw.draw_date}</td>
-                    <td>${ballsHtml}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        } catch (err) {
-            console.error("Error fetching repetitions:", err);
-            tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">Σφάλμα κατά τη φόρτωση.</td></tr>`;
-        }
-    }
-
-    // C. Frequencies
-    async function fetchStats(year = "all") {
-        try {
-            const res = await fetch(`/api/stats?game=${state.game}&year=${year}`);
-            const data = await res.json();
-
-            if (data.status !== "success") return;
-
-            // Update Total Draws Header
-            const totalEl = document.getElementById("total-draws");
-            if (totalEl) totalEl.innerText = data.total_draws || 0;
-
-            // Render Main Frequencies Grid
-            renderStatGrid("main-freq-grid", data.frequencies);
-
-            // Render Joker Frequencies Grid (If applicable)
-            const jokerContainer = document.getElementById("joker-freq-container");
-            if (jokerContainer) {
-                if (state.game === "joker") {
-                    jokerContainer.style.display = "block";
-                    renderStatGrid("joker-freq-grid", data.joker_frequencies);
-                } else {
-                    jokerContainer.style.display = "none";
-                }
-            }
-        } catch (err) {
-            console.error("Error fetching stats:", err);
-        }
-    }
-
-    function renderStatGrid(containerId, freqData) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        container.innerHTML = "";
-
-        if (!freqData) return;
-
-        Object.keys(freqData).forEach(num => {
-            const card = document.createElement("div");
-            card.className = "stat-card";
-            card.innerHTML = `
-                <div class="stat-number">${num}</div>
-                <div class="stat-count">${freqData[num]} φορές</div>
-            `;
-            container.appendChild(card);
-        });
-    }
-
-    // --- 5. GENERATORS CONTROLLER ---
-
-    // A. Random Generator
-    const btnRandom = document.getElementById("btn-gen-random");
-    if (btnRandom) {
-        btnRandom.addEventListener("click", async () => {
-            try {
-                const res = await fetch(`/api/generate/random?game=${state.game}`);
-                const data = await res.json();
-                renderGeneratedResult(data, "Τυχαία Παραγωγή");
-            } catch (err) {
-                console.error("Random Generator Error:", err);
-            }
-        });
-    }
-
-    // B. Rules Generator
-    const btnRules = document.getElementById("btn-gen-rules");
-    if (btnRules) {
-        btnRules.addEventListener("click", async () => {
-            const ruleRows = document.querySelectorAll(".rule-row");
-            const rules = [];
-
-            ruleRows.forEach(row => {
-                const countEl = row.querySelector(".rule-count");
-                const minEl = row.querySelector(".rule-min-delay");
-                const maxEl = row.querySelector(".rule-max-delay");
-
-                const countVal = countEl ? parseInt(countEl.value) : 1;
-                const minVal = minEl && minEl.value !== "" ? parseInt(minEl.value) : null;
-                const maxVal = maxEl && maxEl.value !== "" ? parseInt(maxEl.value) : null;
-
-                rules.push({
-                    count: isNaN(countVal) ? 1 : countVal,
-                    min_delay: isNaN(minVal) ? null : minVal,
-                    max_delay: isNaN(maxVal) ? null : maxVal
-                });
-            });
-
-            try {
-                const res = await fetch("/api/generate/rules", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ game: state.game, rules: rules })
-                });
-                const data = await res.json();
-                renderGeneratedResult(data, "Έξυπνη Παραγωγή με Κανόνες");
-            } catch (err) {
-                console.error("Rules Generator Error:", err);
-            }
-        });
-    }
-
-    function renderGeneratedResult(data, title) {
-        const resBox = document.getElementById("gen-result");
-        if (!resBox) return;
-
-        if (!data || data.status !== "success" || !Array.isArray(data.numbers)) {
-            resBox.innerHTML = `<span class="text-danger fw-bold">⚠️ Αποτυχία παραγωγής: ${data?.message || 'Σφάλμα διακομιστή'}</span>`;
-            return;
-        }
-
-        const mainBalls = data.numbers.map(n => `<span class="ball">${n}</span>`).join(" ");
-        const jokerBall = data.joker ? `<span class="ball joker-ball">${data.joker}</span>` : "";
-
-        resBox.innerHTML = `
-            <h6 class="text-muted mb-3">${title}</h6>
-            <div class="d-flex justify-content-center align-items-center gap-1 flex-wrap">
-                ${mainBalls} ${jokerBall}
-            </div>
-        `;
-    }
-
-    // --- 6. INITIALIZATION ---
-    async function refreshAll() {
-        await fetchYears();
-        fetchRepetitions();
-        const currentYearVal = yearSelect ? yearSelect.value : "all";
-        fetchStats(currentYearVal);
-    }
-
-    // Start App
-    refreshAll();
-});
+    resultBox.style.display = 'block';
+}
