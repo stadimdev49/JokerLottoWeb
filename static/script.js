@@ -1,5 +1,6 @@
 let currentGame = 'joker';
 let chartInstance = null;
+let delayChartInstance = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     populateYearDropdown();
@@ -39,9 +40,11 @@ async function loadStats() {
         const data = await res.json();
 
         document.getElementById('total-draws-count').textContent = data.total_draws.toLocaleString();
+        document.getElementById('last-updated-label').textContent = data.last_updated || '-';
         
         renderGrid(data.frequencies);
         renderChart(data.frequencies);
+        renderDelayChart(data.delays);
     } catch (err) {
         console.error("Σφάλμα κατά τη φόρτωση των στατιστικών:", err);
     }
@@ -116,6 +119,40 @@ function renderChart(frequencies) {
                 label: 'Συχνότητα Εμφάνισης',
                 data: values,
                 backgroundColor: barColor,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: { ticks: { color: '#8d99ae', font: { size: 10 } }, grid: { display: false } },
+                y: { ticks: { color: '#8d99ae' }, grid: { color: '#1f263e' } }
+            }
+        }
+    });
+}
+
+function renderDelayChart(delays) {
+    const ctx = document.getElementById('delayChart').getContext('2d');
+    const labels = Object.keys(delays);
+    const values = Object.values(delays);
+
+    if (delayChartInstance) {
+        delayChartInstance.destroy();
+    }
+
+    delayChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Καθυστέρηση (Κληρώσεις)',
+                data: values,
+                backgroundColor: '#f72585',
                 borderRadius: 4
             }]
         },
