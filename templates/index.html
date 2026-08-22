@@ -20,7 +20,6 @@
     </header>
 
     <main class="container">
-        <!-- Control / Filter Bar -->
         <section class="card filter-section">
             <div class="filter-controls">
                 <div class="filter-group">
@@ -32,7 +31,6 @@
             </div>
         </section>
 
-        <!-- Summary Cards -->
         <section class="stats-cards">
             <div class="card stat-box">
                 <h4>Συνολικές Κληρώσεις Περιόδου</h4>
@@ -42,9 +40,12 @@
                 <h4>Παιχνίδι</h4>
                 <p class="stat-number highlighting" id="active-game-label">ΤΖΟΚΕΡ</p>
             </div>
+            <div class="card stat-box">
+                <h4>Τελευταία Ενημέρωση Νέων Κληρώσεων</h4>
+                <p class="stat-number" id="last-updated-label" style="font-size: 1.2rem; color: var(--accent-cyan);">-</p>
+            </div>
         </section>
 
-        <!-- Analytics Dashboard Grid -->
         <section class="dashboard-grid">
             <div class="card chart-card">
                 <h3>Ιστόγραμμα Συχνότητας Αριθμών</h3>
@@ -53,13 +54,19 @@
                 </div>
             </div>
 
-            <div class="card matrix-card">
+            <div class="card chart-card">
+                <h3>⏳ Καθυστερήσεις Εμφάνισης Αριθμών (Κληρώσεις)</h3>
+                <div class="chart-wrapper">
+                    <canvas id="delayChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card matrix-card full-width-grid">
                 <h3 id="matrix-title">Πίνακας Αριθμών & Εμφανίσεις</h3>
                 <div class="number-grid" id="numberGrid"></div>
             </div>
         </section>
 
-        <!-- Repetition Analysis Table Section -->
         <section class="card repetition-card">
             <h3>📊 Ανάλυση Επαναλήψεων Αριθμών (Τελευταίες 10 Κληρώσεις vs Προηγούμενες 10)</h3>
             <p class="subtitle">Έλεγχος για το πόσοι νικητήριοι αριθμοί είχαν εμφανιστεί στις 10 αμέσως προηγούμενες κληρώσεις.</p>
@@ -77,16 +84,13 @@
                         </tr>
                     </thead>
                     <tbody id="repetitionTableBody">
-                        <!-- Γεμίζει δυναμικά μέσω JS -->
-                    </tbody>
+                        </tbody>
                 </table>
             </div>
         </section>
 
-        <!-- Generators Grid -->
         <section class="generators-grid">
             
-            <!-- 1. Απλή Τυχαία Γεννήτρια -->
             <div class="card generator-card">
                 <h3>🎲 Απλή Τυχαία Γεννήτρια</h3>
                 <p class="subtitle">Παραγωγή εντελώς τυχαίου δελτίου χωρίς φίλτρα.</p>
@@ -98,7 +102,6 @@
                 </div>
             </div>
 
-            <!-- 2. Έξυπνη Γεννήτρια με Κανόνες -->
             <div class="card generator-card">
                 <h3>⚙️ Έξυπνη Γεννήτρια με Κανόνες</h3>
                 <p class="subtitle">Ορίστε κανόνες καθυστέρησης ή συχνότητας.</p>
