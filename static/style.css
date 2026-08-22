@@ -81,7 +81,7 @@ nav {
 
 .stats-cards {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 20px;
 }
 
@@ -104,6 +104,10 @@ nav {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
+}
+
+.full-width-grid {
+    grid-column: 1 / -1;
 }
 
 .chart-wrapper {
@@ -268,5 +272,8 @@ nav {
 @media (max-width: 900px) {
     .dashboard-grid, .stats-cards, .generators-grid {
         grid-template-columns: 1fr;
+    }
+    .full-width-grid {
+        grid-column: auto;
     }
 }
