@@ -129,11 +129,10 @@ async def lifespan(app: FastAPI):
     sync_game_data("joker")
     sync_game_data("lotto")
     
-    # Προσθήκη εργασίας αυτόματου συγχρονισμού 2 φορές την ημέρα (ανά 12 ώρες)
     scheduler.add_job(scheduled_sync_job, 'interval', hours=12)
     scheduler.start()
     
-    yield  # Η εφαρμογή τρέχει και δέχεται αιτήματα
+    yield
     
     # --- SHUTDOWN LOGIC ---
     scheduler.shutdown()
@@ -158,15 +157,22 @@ async def get_stats(game: str = "joker", year: Optional[str] = "all"):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
-    query = "SELECT num1, num2, num3, num4, num5, num6, joker FROM draws WHERE game_type = ?"
+    query = "SELECT num1, num2, num3, num4, num5, num6, joker, draw_date FROM draws WHERE game_type = ?"
     params = [game]
 
     if year and year != "all":
         query += " AND strftime('%Y', draw_date) = ?"
         params.append(str(year))
 
+    query += " ORDER BY draw_date DESC, draw_id DESC"
+
     cursor.execute(query, params)
     rows = cursor.fetchall()
+
+    # Λήψη τελευταίας ενημέρωσης από τη βάση
+    cursor.execute("SELECT MAX(draw_date) FROM draws WHERE game_type = ?", (game,))
+    last_draw_date = cursor.fetchone()[0] or "Άγνωστη"
+
     conn.close()
 
     max_main_number = 45 if game == "joker" else 49
@@ -174,25 +180,36 @@ async def get_stats(game: str = "joker", year: Optional[str] = "all"):
 
     frequencies = {i: 0 for i in range(1, max_main_number + 1)}
     joker_frequencies = {i: 0 for i in range(1, max_bonus_number + 1)} if max_bonus_number > 0 else {}
+    delays = {i: 9999 for i in range(1, max_main_number + 1)}
 
     total_draws = len(rows)
+    limit = 5 if game == "joker" else 6
 
-    for row in rows:
-        limit = 5 if game == "joker" else 6
-        for num in row[:limit]:
+    for idx, row in enumerate(rows):
+        main_nums = row[:limit]
+        for num in main_nums:
             if num in frequencies:
                 frequencies[num] += 1
+                if delays[num] == 9999:
+                    delays[num] = idx
         
         if game == "joker" and row[6] is not None:
             if row[6] in joker_frequencies:
                 joker_frequencies[row[6]] += 1
+
+    # Αν κάποιος αριθμός δεν εμφανίστηκε καθόλου στις επιλεγμένες κληρώσεις
+    for i in delays:
+        if delays[i] == 9999:
+            delays[i] = total_draws
 
     return {
         "status": "success",
         "game": game,
         "total_draws": total_draws,
         "frequencies": frequencies,
-        "joker_frequencies": joker_frequencies
+        "delays": delays,
+        "joker_frequencies": joker_frequencies,
+        "last_updated": f"{last_draw_date} ({datetime.now().strftime('%H:%M')})"
     }
 
 # Ανάλυση Επαναλήψεων
@@ -278,7 +295,7 @@ async def generate_simple_random(game: str = "joker"):
         "joker": joker
     }
 
-# 2. Έξυπνη Γεννήτρια με Κανόνες (Παράγει ΜΟΝΟ όσους αριθμούς πληρούν τους κανόνες)
+# 2. Έξυπνη Γεννήτρια με Κανόνες
 @app.post("/api/generate/rules")
 async def generate_numbers_by_rules(request: Request):
     data = await request.json()
@@ -339,7 +356,6 @@ async def generate_numbers_by_rules(request: Request):
             if valid:
                 candidates.append(num)
 
-        # Επιστρέφουμε ΜΟΝΟ όσους αριθμούς βρέθηκαν και πληρούν τις προδιαγραφές
         if len(candidates) <= count_needed:
             chosen = candidates
         else:
