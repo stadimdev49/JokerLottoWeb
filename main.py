@@ -4,7 +4,6 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 import sqlite3
 import requests
-import calendar
 import random
 from datetime import datetime
 from typing import Optional
@@ -45,72 +44,73 @@ def sync_game_data(game_type: str):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
-    now = datetime.now()
-    current_year = now.year
-    current_month = now.month
-
     total_inserted = 0
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         "Accept": "application/json"
     }
 
-    for year in range(2010, current_year + 1):
-        max_month = current_month if year == current_year else 12
+    try:
+        # 1. Παίρνουμε την τελευταία ενεργή κλήρωση για να βρούμε το μέγιστο drawId
+        latest_url = f"https://api.opap.gr/draws/v3.0/{game_id}/last"
+        res = requests.get(latest_url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            latest_draw = res.json()
+            max_draw_id = latest_draw.get('drawId')
+            if max_draw_id:
+                # ΟΠΑΠ draw IDs: Υπολογισμός εκτιμώμενου εύρους για τα τελευταία χρόνια (από το 2022 και μετά ή και παλαιότερα)
+                # Κάνουμε μαζικό fetch σε πακέτα (π.χ. ανά 500 IDs προς τα πίσω μέχρι να πιάσουμε ικανό ιστορικό)
+                chunk_size = 500
+                # Αν θέλουμε να κατεβάσουμε από αρκετά πίσω, ορίζουμε ένα ασφαλές ελάχιστο ID ή σαρώνουμε με πακέτα
+                # Για το Τζόκερ/Lotto τα IDs αυξάνονται με σταθερό ρυθμό ανά κλήρωση.
+                # Ας τραβήξουμε τα τελευταία 4000 IDs σε πακέτα των 500 για απόλυτη πληρότητα.
+                current_max = max_draw_id
+                min_target_id = max(1, max_draw_id - 5000) # Καλύπτει άνωσ των τελευταίων ετών
 
-        for month in range(1, max_month + 1):
-            last_day = calendar.monthrange(year, month)[1]
-            start_date = f"{year}-{month:02d}-01"
-            end_date = f"{year}-{month:02d}-{last_day:02d}"
-
-            if year == current_year and month == current_month:
-                end_date = now.strftime("%Y-%m-%d")
-
-            url = f"https://api.opap.gr/draws/v3.0/{game_id}/draw-date/{start_date}/{end_date}"
-
-            try:
-                res = requests.get(url, headers=headers, timeout=10)
-                if res.status_code != 200:
-                    continue
-
-                data = res.json()
-                draws = data.get('content', []) if isinstance(data, dict) else data
-
-                inserted_this_month = 0
-                for draw in draws:
-                    draw_id = draw.get('drawId')
-                    draw_time_raw = draw.get('drawTime')
+                while current_max > min_target_id:
+                    chunk_min = max(min_target_id, current_max - chunk_size + 1)
+                    range_url = f"https://api.opap.gr/draws/v3.0/{game_id}/draw-id/{chunk_min}/{current_max}"
                     
-                    if isinstance(draw_time_raw, int):
-                        draw_date = datetime.fromtimestamp(draw_time_raw / 1000).strftime('%Y-%m-%d')
-                    elif isinstance(draw_time_raw, str):
-                        draw_date = draw_time_raw.split("T")[0]
-                    else:
-                        draw_date = start_date
+                    try:
+                        r_res = requests.get(range_url, headers=headers, timeout=10)
+                        if r_res.status_code == 200:
+                            r_data = r_res.json()
+                            draws_list = r_data.get('content', r_data.get('result', [])) if isinstance(r_data, dict) else r_data
+                            
+                            for draw in draws_list:
+                                d_id = draw.get('drawId')
+                                d_time_raw = draw.get('drawTime')
+                                if isinstance(d_time_raw, int):
+                                    d_date = datetime.fromtimestamp(d_time_raw / 1000).strftime('%Y-%m-%d')
+                                elif isinstance(d_time_raw, str):
+                                    d_date = d_time_raw.split("T")[0]
+                                else:
+                                    d_date = datetime.now().strftime('%Y-%m-%d')
 
-                    winning_numbers = draw.get('winningNumbers', {})
-                    list_nums = winning_numbers.get('list', [])
-                    bonus_nums = winning_numbers.get('bonus', [])
+                                w_nums = draw.get('winningNumbers', {})
+                                l_nums = w_nums.get('list', [])
+                                b_nums = w_nums.get('bonus', [])
 
-                    if len(list_nums) >= 5:
-                        num1, num2, num3, num4, num5 = list_nums[:5]
-                        num6 = list_nums[5] if len(list_nums) > 5 else None
-                        joker = bonus_nums[0] if bonus_nums else None
+                                if len(l_nums) >= 5:
+                                    n1, n2, n3, n4, n5 = l_nums[:5]
+                                    n6 = l_nums[5] if len(l_nums) > 5 else None
+                                    jk = b_nums[0] if b_nums else None
 
-                        cursor.execute('''
-                            INSERT OR IGNORE INTO draws 
-                            (game_type, draw_id, draw_date, num1, num2, num3, num4, num5, num6, joker)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (game_type, draw_id, draw_date, num1, num2, num3, num4, num5, num6, joker))
-                        
-                        if cursor.rowcount > 0:
-                            inserted_this_month += 1
+                                    cursor.execute('''
+                                        INSERT OR IGNORE INTO draws 
+                                        (game_type, draw_id, draw_date, num1, num2, num3, num4, num5, num6, joker)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    ''', (game_type, d_id, d_date, n1, n2, n3, n4, n5, n6, jk))
+                                    if cursor.rowcount > 0:
+                                        total_inserted += 1
+                            conn.commit()
+                    except Exception:
+                        pass
 
-                conn.commit()
-                total_inserted += inserted_this_month
+                    current_max = chunk_min - 1
 
-            except Exception:
-                pass
+    except Exception:
+        pass
 
     conn.close()
     return total_inserted
@@ -169,9 +169,9 @@ async def get_stats(game: str = "joker", year: Optional[str] = "all"):
     cursor.execute(query, params)
     rows = cursor.fetchall()
 
-    # Λήψη τελευταίας ενημέρωσης από τη βάση
     cursor.execute("SELECT MAX(draw_date) FROM draws WHERE game_type = ?", (game,))
-    last_draw_date = cursor.fetchone()[0] or "Άγνωστη"
+    res_date = cursor.fetchone()
+    last_draw_date = res_date[0] if res_date and res_date[0] else "Άγνωστη"
 
     conn.close()
 
@@ -197,7 +197,6 @@ async def get_stats(game: str = "joker", year: Optional[str] = "all"):
             if row[6] in joker_frequencies:
                 joker_frequencies[row[6]] += 1
 
-    # Αν κάποιος αριθμός δεν εμφανίστηκε καθόλου στις επιλεγμένες κληρώσεις
     for i in delays:
         if delays[i] == 9999:
             delays[i] = total_draws
@@ -212,7 +211,6 @@ async def get_stats(game: str = "joker", year: Optional[str] = "all"):
         "last_updated": f"{last_draw_date} ({datetime.now().strftime('%H:%M')})"
     }
 
-# Ανάλυση Επαναλήψεων
 @app.get("/api/stats/repetitions")
 async def get_repetitions_stats(game: str = "joker"):
     conn = sqlite3.connect(DB_NAME)
@@ -280,7 +278,6 @@ async def get_repetitions_stats(game: str = "joker"):
         "repetitions": results
     }
 
-# 1. Απλή Τυχαία Γεννήτρια
 @app.get("/api/generate/random")
 async def generate_simple_random(game: str = "joker"):
     max_num = 45 if game == "joker" else 49
@@ -295,7 +292,6 @@ async def generate_simple_random(game: str = "joker"):
         "joker": joker
     }
 
-# 2. Έξυπνη Γεννήτρια με Κανόνες
 @app.post("/api/generate/rules")
 async def generate_numbers_by_rules(request: Request):
     data = await request.json()
