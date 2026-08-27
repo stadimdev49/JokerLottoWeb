@@ -45,11 +45,6 @@ def sync_game_data(game_type: str):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # 1. Βρίσκουμε ποιο είναι το μεγαλύτερο draw_id που ΕΧΟΥΜΕ ΗΔΗ στη βάση
-    cursor.execute("SELECT MAX(draw_id) FROM draws WHERE game_type = ?", (game_type,))
-    res = cursor.fetchone()
-    last_saved_id = res[0] if res and res[0] else 0
-
     total_inserted = 0
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -57,76 +52,60 @@ def sync_game_data(game_type: str):
     }
 
     try:
-        # 2. Παίρνουμε την τελευταία ενεργή κλήρωση του ΟΠΑΠ
-        latest_url = f"https://api.opap.gr/draws/v3.0/{game_id}/last"
+        # Ζητάμε από τον ΟΠΑΠ απευθείας τις τελευταίες 50 κληρώσεις ώστε να καλυφθούν σίγουρα οι μέρες που λείπουν
+        latest_url = f"https://api.opap.gr/draws/v3.0/{game_id}/last/50"
         res = requests.get(latest_url, headers=headers, timeout=10)
         
         if res.status_code == 200:
-            latest_draw = res.json()
-            max_draw_id = latest_draw.get('drawId')
-            
-            if max_draw_id:
-                # Αν η βάση είναι εντελώς άδεια, τραβάμε τις τελευταίες 5000.
-                # Αλλιώς, ξεκινάμε ακριβώς από την επόμενη κλήρωση που μας λείπει.
-                if last_saved_id == 0:
-                    min_target_id = max(1, max_draw_id - 5000)
-                else:
-                    min_target_id = last_saved_id + 1
+            data = res.json()
+            if isinstance(data, list):
+                draws_list = data
+            elif isinstance(data, dict):
+                draws_list = data.get('content', data.get('result', []))
+            else:
+                draws_list = []
 
-                # Αν έχουμε μείνει πίσω, κάνουμε τα requests μόνο για ό,τι λείπει
-                if min_target_id <= max_draw_id:
-                    current_max = max_draw_id
-                    chunk_size = 500
+            if not draws_list:
+                single_url = f"https://api.opap.gr/draws/v3.0/{game_id}/last"
+                s_res = requests.get(single_url, headers=headers, timeout=10)
+                if s_res.status_code == 200:
+                    draws_list = [s_res.json()]
+
+            for draw in draws_list:
+                d_id = draw.get('drawId')
+                if not d_id:
+                    continue
                     
-                    while current_max >= min_target_id:
-                        chunk_min = max(min_target_id, current_max - chunk_size + 1)
-                        range_url = f"https://api.opap.gr/draws/v3.0/{game_id}/draw-id/{chunk_min}/{current_max}"
-                        
-                        try:
-                            r_res = requests.get(range_url, headers=headers, timeout=10)
-                            if r_res.status_code == 200:
-                                r_data = r_res.json()
-                                draws_list = r_data.get('content', r_data.get('result', [])) if isinstance(r_data, dict) else r_data
-                                
-                                for draw in draws_list:
-                                    d_id = draw.get('drawId')
-                                    d_time_raw = draw.get('drawTime')
-                                    
-                                    if isinstance(d_time_raw, int):
-                                        d_date = datetime.fromtimestamp(d_time_raw / 1000).strftime('%Y-%m-%d')
-                                    elif isinstance(d_time_raw, str):
-                                        d_date = d_time_raw.split("T")[0]
-                                    else:
-                                        d_date = datetime.now().strftime('%Y-%m-%d')
-
-                                    w_nums = draw.get('winningNumbers', {})
-                                    l_nums = w_nums.get('list', [])
-                                    b_nums = w_nums.get('bonus', [])
-
-                                    if len(l_nums) >= 5:
-                                        n1, n2, n3, n4, n5 = l_nums[:5]
-                                        n6 = l_nums[5] if len(l_nums) > 5 else None
-                                        jk = b_nums[0] if b_nums else None
-
-                                        cursor.execute('''
-                                            INSERT OR IGNORE INTO draws 
-                                            (game_type, draw_id, draw_date, num1, num2, num3, num4, num5, num6, joker)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                        ''', (game_type, d_id, d_date, n1, n2, n3, n4, n5, n6, jk))
-                                        
-                                        if cursor.rowcount > 0:
-                                            total_inserted += 1
-                                conn.commit()
-                            else:
-                                print(f"Σφάλμα API ΟΠΑΠ: Κωδικός {r_res.status_code} στο range {chunk_min}-{current_max}")
-                        except Exception as e:
-                            print(f"Δικτυακό σφάλμα κατά τη λήψη του range {chunk_min}-{current_max}: {e}")
-                        
-                        current_max = chunk_min - 1
+                d_time_raw = draw.get('drawTime')
+                if isinstance(d_time_raw, int):
+                    d_date = datetime.fromtimestamp(d_time_raw / 1000).strftime('%Y-%m-%d')
+                elif isinstance(d_time_raw, str):
+                    d_date = d_time_raw.split("T")[0]
                 else:
-                    print(f"Το {game_type} είναι ήδη πλήρως ενημερωμένο.")
+                    d_date = datetime.now().strftime('%Y-%m-%d')
+
+                w_nums = draw.get('winningNumbers', {})
+                l_nums = w_nums.get('list', [])
+                b_nums = w_nums.get('bonus', [])
+
+                if len(l_nums) >= 5:
+                    n1, n2, n3, n4, n5 = l_nums[:5]
+                    n6 = l_nums[5] if len(l_nums) > 5 else None
+                    jk = b_nums[0] if b_nums else None
+
+                    cursor.execute('''
+                        INSERT OR IGNORE INTO draws 
+                        (game_type, draw_id, draw_date, num1, num2, num3, num4, num5, num6, joker)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (game_type, d_id, d_date, n1, n2, n3, n4, n5, n6, jk))
+                    
+                    if cursor.rowcount > 0:
+                        total_inserted += 1
+            conn.commit()
+        else:
+            print(f"Σφάλμα API ΟΠΑΠ για {game_type}: Κωδικός {res.status_code}")
     except Exception as e:
-        print(f"Σφάλμα κατά την επικοινωνία με το endpoint /last του {game_type}: {e}")
+        print(f"Δικτυακό σφάλμα κατά τον συγχρονισμό του {game_type}: {e}")
 
     conn.close()
     return total_inserted
@@ -337,7 +316,7 @@ async def generate_numbers_by_rules(request: Request):
     for index, draw in enumerate(draws):
         main_draw_nums = draw[:limit_nums]
         for num in range(1, max_num + 1):
-            if num in main_draw_nums and delays[num] == 9999:
+            | if num in main_draw_nums and delays[num] == 9999:
                 delays[num] = index
 
     selected_numbers = []
