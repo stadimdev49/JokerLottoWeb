@@ -316,7 +316,7 @@ async def generate_numbers_by_rules(request: Request):
     for index, draw in enumerate(draws):
         main_draw_nums = draw[:limit_nums]
         for num in range(1, max_num + 1):
-            | if num in main_draw_nums and delays[num] == 9999:
+            if num in main_draw_nums and delays[num] == 9999:
                 delays[num] = index
 
     selected_numbers = []
