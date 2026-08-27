@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Optional
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 DB_NAME = "lottery.db"
 
@@ -61,11 +62,8 @@ def sync_game_data(game_type: str):
                 # ΟΠΑΠ draw IDs: Υπολογισμός εκτιμώμενου εύρους για τα τελευταία χρόνια (από το 2022 και μετά ή και παλαιότερα)
                 # Κάνουμε μαζικό fetch σε πακέτα (π.χ. ανά 500 IDs προς τα πίσω μέχρι να πιάσουμε ικανό ιστορικό)
                 chunk_size = 500
-                # Αν θέλουμε να κατεβάσουμε από αρκετά πίσω, ορίζουμε ένα ασφαλές ελάχιστο ID ή σαρώνουμε με πακέτα
-                # Για το Τζόκερ/Lotto τα IDs αυξάνονται με σταθερό ρυθμό ανά κλήρωση.
-                # Ας τραβήξουμε τα τελευταία 4000 IDs σε πακέτα των 500 για απόλυτη πληρότητα.
                 current_max = max_draw_id
-                min_target_id = max(1, max_draw_id - 5000) # Καλύπτει άνωσ των τελευταίων ετών
+                min_target_id = max(1, max_draw_id - 5000) # Καλύπτει πάνω από τα τελευταία έτη
 
                 while current_max > min_target_id:
                     chunk_min = max(min_target_id, current_max - chunk_size + 1)
@@ -116,7 +114,7 @@ def sync_game_data(game_type: str):
     return total_inserted
 
 def scheduled_sync_job():
-    """Περιοδικός συγχρονισμός 2 φορές την ημέρα (ανά 12 ώρες)."""
+    """Περιοδικός συγχρονισμός 3 φορές την ημέρα (20:00, 22:00, 00:00)."""
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Έναρξη προγραμματισμένου συγχρονισμού...")
     j_new = sync_game_data("joker")
     l_new = sync_game_data("lotto")
@@ -129,7 +127,11 @@ async def lifespan(app: FastAPI):
     sync_game_data("joker")
     sync_game_data("lotto")
     
-    scheduler.add_job(scheduled_sync_job, 'interval', hours=12)
+    # Προσθήκη CronTrigger για εκτέλεση στις 20:00, 22:00 και 00:00 καθημερινά
+    scheduler.add_job(
+        scheduled_sync_job, 
+        CronTrigger(hour="20,22,0", minute=0)
+    )
     scheduler.start()
     
     yield
